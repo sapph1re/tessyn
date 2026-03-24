@@ -109,8 +109,11 @@ export function startWsServer(db: Database.Database, port?: number): Promise<Web
         }
 
         // All other requests go through the standard handler
-        const response = handleRequest(db, raw);
-        ws.send(JSON.stringify(response));
+        handleRequest(db, raw).then((response) => {
+          ws.send(JSON.stringify(response));
+        }).catch((err) => {
+          log.error('WS handler error', { error: err instanceof Error ? err.message : String(err) });
+        });
       });
 
       ws.on('close', () => {

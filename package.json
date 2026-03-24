@@ -1,10 +1,19 @@
 {
   "name": "tessyn",
   "version": "0.1.0",
-  "description": "The developer workflow operating system.",
+  "description": "Background daemon that indexes Claude Code sessions into searchable SQLite with full-text search. Cross-session search, session history, and a stable API for developer workflow tools.",
   "type": "module",
   "engines": {
     "node": ">=22.0.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/daemon/index.js",
+      "types": "./dist/daemon/index.d.ts"
+    }
   },
   "bin": {
     "tessyn": "./dist/cli/index.js"
@@ -12,6 +21,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "prepublishOnly": "npm run build && npm test",
     "test": "vitest run",
     "test:unit": "vitest run test/unit",
     "test:integration": "vitest run test/integration",
@@ -25,11 +35,23 @@
     "developer-tools",
     "workflow",
     "claude-code",
-    "session-management"
+    "session-management",
+    "search",
+    "sqlite",
+    "daemon"
   ],
   "author": "Roman Still",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sapph1re/tessyn.git"
+  },
+  "homepage": "https://github.com/sapph1re/tessyn#readme",
+  "bugs": {
+    "url": "https://github.com/sapph1re/tessyn/issues"
+  },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
     "@parcel/watcher": "^2.5.6",
     "better-sqlite3": "^12.8.0",
     "commander": "^14.0.3",

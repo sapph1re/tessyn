@@ -3,6 +3,7 @@ import { createLogger } from '../shared/logger.js';
 import { getStatus } from '../daemon/lifecycle.js';
 import * as queries from '../db/queries.js';
 import { fullReindex } from '../indexer/index.js';
+import { generateMissingTitles } from '../assist/titles.js';
 import {
   createResponse,
   createErrorResponse,
@@ -18,8 +19,9 @@ const log = createLogger('handlers');
 
 /**
  * Handle a JSON-RPC request and return a response.
+ * Some methods are async (title generation), so this returns a Promise.
  */
-export function handleRequest(db: Database.Database, raw: string): JsonRpcResponse {
+export async function handleRequest(db: Database.Database, raw: string): Promise<JsonRpcResponse> {
   const request = parseRequest(raw);
 
   if (!request) {
@@ -73,25 +75,27 @@ export function handleRequest(db: Database.Database, raw: string): JsonRpcRespon
           });
           return createResponse(request.id, { results, count: results.length });
         } catch (err) {
-          // FTS5 MATCH syntax errors from user input should be INVALID_PARAMS
           const msg = err instanceof Error ? err.message : String(err);
           if (msg.includes('fts5')) {
             return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, `Invalid search query: ${msg}`);
           }
-          throw err; // Re-throw non-FTS errors for the outer catch
+          throw err;
         }
       }
 
       case 'reindex': {
-        // Run full reindex (synchronous — better-sqlite3 is sync anyway)
         const result = fullReindex(db);
         return createResponse(request.id, { indexed: result.indexed, total: result.total });
       }
 
+      case 'titles.generate': {
+        const limit = (request.params?.['limit'] as number | undefined) ?? 50;
+        const generated = await generateMissingTitles(db, limit);
+        return createResponse(request.id, { generated });
+      }
+
       case 'shutdown': {
-        // Signal the daemon to shut down gracefully
         log.info('Shutdown requested via RPC');
-        // Set a brief timeout to allow the response to be sent before shutting down
         setTimeout(() => process.emit('SIGTERM', 'SIGTERM'), 100);
         return createResponse(request.id, { message: 'Shutting down' });
       }

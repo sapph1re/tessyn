@@ -30,6 +30,8 @@ tessyn stop
 | `tessyn sessions list [--project <slug>] [--limit N]` | List indexed sessions |
 | `tessyn sessions show <id>` | Display session messages |
 | `tessyn search <query> [--project <slug>] [--role <role>]` | Full-text search across all sessions |
+| `tessyn titles [--limit N]` | Generate titles for untitled sessions via Claude Haiku |
+| `tessyn watch` | Stream daemon events in real-time |
 | `tessyn reindex` | Rebuild the entire index from JSONL files |
 
 ## How It Works
@@ -59,6 +61,7 @@ JSONL files are the source of truth. Tessyn never writes to them. The SQLite dat
 src/
 ├── daemon/       # Entry point, lifecycle, IPC + WebSocket servers
 ├── cli/          # Commander-based CLI, IPC client
+├── assist/       # Claude API integration (title generation)
 ├── indexer/      # JSONL parser, checkpoint model, session discovery
 ├── db/           # SQLite, FTS5, migrations, prepared queries
 ├── watcher/      # @parcel/watcher, debounced change processing
@@ -90,6 +93,7 @@ All paths are overridable via environment variables:
 | `TESSYN_SOCKET_PATH` | `/tmp/tessyn-<uid>.sock`² | IPC socket path |
 | `TESSYN_WS_PORT` | `9833` | WebSocket server port |
 | `TESSYN_LOG_LEVEL` | `info` | Log level: debug, info, warn, error |
+| `ANTHROPIC_API_KEY` | *(none)* | Required for title generation (`tessyn titles`) |
 
 ¹ macOS: `~/Library/Application Support/tessyn/`, Linux: `~/.local/share/tessyn/`, Windows: `%LOCALAPPDATA%\tessyn\Data\`
 ² Windows: `\\.\pipe\tessyn-<username>`

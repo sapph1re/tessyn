@@ -30,8 +30,11 @@ export function startIpcServer(db: Database.Database, socketPath?: string): Prom
           buffer = buffer.substring(newlineIdx + 1);
 
           if (line) {
-            const response = handleRequest(db, line);
-            conn.write(JSON.stringify(response) + '\n');
+            handleRequest(db, line).then((response) => {
+              conn.write(JSON.stringify(response) + '\n');
+            }).catch((err) => {
+              log.error('IPC handler error', { error: err instanceof Error ? err.message : String(err) });
+            });
           }
         }
       });

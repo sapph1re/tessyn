@@ -7,6 +7,8 @@ import { statusCommand } from './commands/status.js';
 import { listSessionsCommand, showSessionCommand } from './commands/sessions.js';
 import { searchCommand } from './commands/search.js';
 import { reindexCommand } from './commands/reindex.js';
+import { titlesCommand } from './commands/titles.js';
+import { watchCommand } from './commands/watch.js';
 
 const program = new Command();
 
@@ -79,6 +81,21 @@ program
   .description('Trigger a full reindex of all sessions')
   .action(async () => {
     await reindexCommand();
+  });
+
+program
+  .command('titles')
+  .description('Generate titles for untitled sessions using Claude Haiku')
+  .option('-l, --limit <n>', 'Max sessions to process', '50')
+  .action(async (options) => {
+    await titlesCommand({ limit: parseInt(options.limit, 10) });
+  });
+
+program
+  .command('watch')
+  .description('Stream daemon events in real-time')
+  .action(async () => {
+    await watchCommand();
   });
 
 program.parse();

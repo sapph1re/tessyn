@@ -9,6 +9,7 @@ import { startWatcher, stopWatcher } from '../watcher/index.js';
 import { startIpcServer, stopIpcServer } from './ipc-server.js';
 import { startWsServer, stopWsServer, broadcastNotification } from './ws-server.js';
 import { sessionCreated, sessionUpdated, sessionDeleted, indexStateChanged } from '../protocol/events.js';
+import { generateMissingTitles, hasApiKey } from '../assist/titles.js';
 
 const log = createLogger('daemon');
 
@@ -48,6 +49,13 @@ export async function startDaemon(): Promise<void> {
   setState('caught_up');
   broadcastNotification(indexStateChanged('caught_up', total, total));
   log.info('Initial scan complete', { indexed, total });
+
+  // Generate titles for sessions that don't have them (background, non-blocking)
+  if (hasApiKey()) {
+    generateMissingTitles(db).catch((err) => {
+      log.warn('Title generation failed', { error: err instanceof Error ? err.message : String(err) });
+    });
+  }
 
   // Start file watcher for ongoing changes
   await startWatcher(db, (event) => {
