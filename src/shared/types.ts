@@ -62,24 +62,7 @@ export interface Message {
   blockType: BlockType | null;
 }
 
-// === JSONL Event Types ===
-
-export interface JsonlEvent {
-  type: string;
-  timestamp?: string;
-  message?: JsonlMessageContent;
-  session_id?: string;
-  // Byte range in the source file
-  byteStart: number;
-  byteEnd: number;
-  lineNumber: number;
-}
-
-export interface JsonlMessageContent {
-  role?: string;
-  content?: string | JsonlContentBlock[];
-  model?: string;
-}
+// === JSONL Content Block (used by parser) ===
 
 export interface JsonlContentBlock {
   type: string;
