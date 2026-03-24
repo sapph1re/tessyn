@@ -93,7 +93,6 @@ All paths are overridable via environment variables:
 | `TESSYN_SOCKET_PATH` | `/tmp/tessyn-<uid>.sock`² | IPC socket path |
 | `TESSYN_WS_PORT` | `9833` | WebSocket server port |
 | `TESSYN_LOG_LEVEL` | `info` | Log level: debug, info, warn, error |
-| `ANTHROPIC_API_KEY` | *(none)* | Required for title generation (`tessyn titles`) |
 
 ¹ macOS: `~/Library/Application Support/tessyn/`, Linux: `~/.local/share/tessyn/`, Windows: `%LOCALAPPDATA%\tessyn\Data\`
 ² Windows: `\\.\pipe\tessyn-<username>`

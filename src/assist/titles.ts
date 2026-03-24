@@ -1,33 +1,31 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import type Database from 'better-sqlite3';
 import { createLogger } from '../shared/logger.js';
 import * as queries from '../db/queries.js';
 
 const log = createLogger('titles');
 
-const MODEL = 'claude-haiku-4-20250414';
+const execFileAsync = promisify(execFile);
+
 const MAX_PROMPTS = 3;
 const MAX_CHARS_PER_PROMPT = 500;
-const BATCH_SIZE = 20;
-
-let client: Anthropic | null = null;
-
-function getClient(): Anthropic {
-  if (!client) {
-    client = new Anthropic();
-  }
-  return client;
-}
+const BATCH_SIZE = 5; // Lower concurrency — each spawns a Claude process
 
 /**
- * Check if the Anthropic API key is available.
+ * Check if `claude` CLI is available on the system.
  */
-export function hasApiKey(): boolean {
-  return !!(process.env['ANTHROPIC_API_KEY']);
+export async function isClaudeAvailable(): Promise<boolean> {
+  try {
+    await execFileAsync('claude', ['--version'], { timeout: 5000 });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Generate a title for a single session based on its first user messages.
+ * Generate a title for a session using `claude -p` (uses the user's subscription).
  */
 export async function generateTitle(userMessages: string[]): Promise<string> {
   const snippets = userMessages
@@ -35,24 +33,22 @@ export async function generateTitle(userMessages: string[]): Promise<string> {
     .map(m => m.substring(0, MAX_CHARS_PER_PROMPT));
 
   const content = snippets.join('\n---\n');
+  const prompt = `Generate a short, descriptive title (max 50 characters) for a coding session based on these user messages. Return ONLY the title text, no quotes, no explanation, no punctuation at the end.\n\n${content}`;
 
   try {
-    const response = await getClient().messages.create({
-      model: MODEL,
-      max_tokens: 80,
-      messages: [
-        {
-          role: 'user',
-          content: `Generate a short, descriptive title (max 50 characters) for a coding session based on these user messages. Return ONLY the title text, no quotes, no explanation, no punctuation at the end.\n\n${content}`,
-        },
-      ],
+    const { stdout } = await execFileAsync('claude', [
+      '-p', prompt,
+      '--model', 'haiku',
+      '--output-format', 'text',
+      '--no-session-persistence',
+      '--max-turns', '1',
+    ], {
+      timeout: 30000,
+      env: { ...process.env, CLAUDE_CODE_ENTRYPOINT: 'tessyn' },
     });
 
-    const block = response.content[0];
-    if (block && block.type === 'text') {
-      return block.text.trim().replace(/^["']|["']$/g, ''); // Strip any quotes
-    }
-    return 'Untitled session';
+    const title = stdout.trim().replace(/^["']|["']$/g, '');
+    return title || 'Untitled session';
   } catch (err) {
     log.warn('Title generation failed', {
       error: err instanceof Error ? err.message : String(err),
@@ -63,12 +59,13 @@ export async function generateTitle(userMessages: string[]): Promise<string> {
 
 /**
  * Generate titles for sessions that don't have one yet.
- * Processes in batches to avoid overwhelming the API.
+ * Uses `claude -p` which goes through the user's Claude Code subscription.
  * Returns the number of titles generated.
  */
 export async function generateMissingTitles(db: Database.Database, limit?: number): Promise<number> {
-  if (!hasApiKey()) {
-    log.info('No ANTHROPIC_API_KEY set, skipping title generation');
+  const available = await isClaudeAvailable();
+  if (!available) {
+    log.info('Claude CLI not available, skipping title generation');
     return 0;
   }
 
@@ -88,14 +85,12 @@ export async function generateMissingTitles(db: Database.Database, limit?: numbe
 
   let generated = 0;
 
-  // Process in batches
+  // Process in small batches (each spawns a claude process)
   for (let i = 0; i < sessions.length; i += BATCH_SIZE) {
     const batch = sessions.slice(i, i + BATCH_SIZE);
 
-    // Process each session in the batch concurrently
     const promises = batch.map(async (session) => {
       try {
-        // Get first few user messages for context
         const messages = db.prepare(`
           SELECT content FROM messages
           WHERE session_id = ? AND role = 'user'
