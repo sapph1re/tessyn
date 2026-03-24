@@ -51,6 +51,10 @@ Follow the contributing workflow in `README.md`. Additional rules for you:
 - Memory files must reflect current reality
 - If you rename something, rename it everywhere
 
+## Daemon Awareness
+
+Check daemon status (`tessyn status`) before and after code changes. Preserve the user's daemon state: if it was running, rebuild and restart it; if it was stopped, leave it stopped. If you start it for your own testing, stop it when done.
+
 ## Build & Test
 
 ```bash
