@@ -33,6 +33,24 @@ Follow the contributing workflow in `README.md`. Additional rules for you:
 - **Before starting work:** check open PRs (`gh pr list`). If anyone is working on overlapping code (same files, same module, same feature area), **stop and flag it** before proceeding.
 - **Before opening a PR:** merge latest master into your branch, resolve conflicts carefully (review each one, don't blindly accept either side), run the full test suite after the merge.
 
+## Quality Gates
+
+**Before implementing:** Review your plan with Codex (`/codex-review`). Get feedback on approach, edge cases, and risks before writing code.
+
+**Before pushing:** Review your changes with Codex (`/codex-review`). Address findings before pushing. This applies to every push, not just PRs.
+
+**After every change:** Clean up. No orphan code, unused imports, dead files, stale references. Check:
+- Unused exports or imports (run `npm run lint`)
+- Files that are no longer referenced
+- Documentation that references removed or renamed things
+- Memory files that have become stale
+
+**Consistency:** Every change must be consistent across all related parts:
+- Code, types, and tests must agree
+- Documentation in `/docs`, `README.md`, and `CLAUDE.md` must agree
+- Memory files must reflect current reality
+- If you rename something, rename it everywhere
+
 ## Build & Test
 
 ```bash
