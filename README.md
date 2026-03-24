@@ -111,6 +111,63 @@ npm run lint         # ESLint
 
 See [docs/](docs/) for architecture, schema, protocol, and testing documentation.
 
+## Contributing
+
+We use trunk-based development with `master` as the trunk. Merge (not rebase) to integrate changes.
+
+### Getting Started
+
+**External contributors:** Fork the repo first, then clone your fork. Replace `origin` with `upstream` when pulling from the main repo.
+
+**Maintainers with write access:** Clone the repo directly.
+
+### Workflow
+
+```bash
+# 1. Start from latest master
+git switch master
+git pull --ff-only origin master
+
+# 2. Check for overlapping work
+gh pr list   # Coordinate if someone is working on the same area
+
+# 3. Create a branch
+git switch -c <type>/<short-description>
+# Types: feat/, fix/, refactor/, docs/, chore/, test/
+# Examples: feat/title-generation, fix/socket-path-macos
+
+# 4. Make changes, commit frequently
+
+# 5. Before pushing — all must pass
+npm run build && npm run lint && npm test
+
+# 6. Before opening a PR — merge latest master
+git fetch origin master
+git merge origin/master   # Resolve any conflicts
+npm test                  # Run tests again after merge
+
+# 7. Push and open PR
+git push -u origin <branch-name>
+gh pr create
+```
+
+### CI
+
+All PRs are checked by GitHub Actions. All checks must pass before merging.
+
+| Check | Platforms |
+|-------|-----------|
+| Lint + build | Linux x64 |
+| Unit tests | Linux x64, Linux ARM64, macOS ARM64, Windows x64 |
+| Integration tests | Linux x64, macOS ARM64, Windows x64 |
+| E2E tests | Linux x64, macOS ARM64 |
+
+### Where Things Go
+
+- **Code:** `src/`, tests in `test/`
+- **Documentation:** `docs/` — update when architecture, schema, or protocol changes
+- **README:** User-facing — update when CLI commands or configuration changes
+
 ## Tech Stack
 
 - **TypeScript / Node.js** (>=22) — daemon and CLI

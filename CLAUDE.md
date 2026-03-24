@@ -24,6 +24,15 @@ Project documentation lives in `/docs`. Read it before making changes.
 
 **After changes:** Update `README.md` if user-facing behavior changed. Update `/docs` if architecture, schema, protocol, or conventions changed.
 
+## Git Workflow
+
+Follow the contributing workflow in `README.md`. Additional rules for you:
+
+- **Commit frequently.** Small, logical commits. No co-author tags.
+- **Push only when tests pass** and the feature/fix is complete. Don't push broken or partial work.
+- **Before starting work:** check open PRs (`gh pr list`). If anyone is working on overlapping code (same files, same module, same feature area), **stop and flag it** before proceeding.
+- **Before opening a PR:** merge latest master into your branch, resolve conflicts carefully (review each one, don't blindly accept either side), run the full test suite after the merge.
+
 ## Build & Test
 
 ```bash
