@@ -85,7 +85,7 @@ program
 
 program
   .command('titles')
-  .description('Generate titles for untitled sessions using Claude Haiku')
+  .description('Generate titles for untitled sessions (requires claude CLI)')
   .option('-l, --limit <n>', 'Max sessions to process', '50')
   .action(async (options) => {
     await titlesCommand({ limit: parseInt(options.limit, 10) });
