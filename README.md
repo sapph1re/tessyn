@@ -109,7 +109,7 @@ npm run test:watch   # Watch mode for unit tests
 npm run lint         # ESLint
 ```
 
-See [CLAUDE.md](CLAUDE.md) for conventions and architecture details.
+See [docs/](docs/) for architecture, schema, protocol, and testing documentation.
 
 ## Tech Stack
 
