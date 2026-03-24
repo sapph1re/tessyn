@@ -113,36 +113,60 @@ See [docs/](docs/) for architecture, schema, protocol, and testing documentation
 
 ## Contributing
 
-We use trunk-based development with `master` as the trunk.
+We use trunk-based development with `master` as the trunk. Merge (not rebase) to integrate changes.
+
+### Getting Started
+
+**External contributors:** Fork the repo first, then clone your fork. Replace `origin` with `upstream` when pulling from the main repo.
+
+**Maintainers with write access:** Clone the repo directly.
 
 ### Workflow
 
-1. **Pull the latest master:** `git pull origin master`
-2. **Check open PRs:** `gh pr list` — if someone is already working on the same area, coordinate before starting.
-3. **Create a branch:** `git checkout -b <type>/<short-description>`
-   - Types: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`, `test/`
-   - Examples: `feat/title-generation`, `fix/socket-path-macos`
-4. **Make your changes.** Commit frequently — small, logical commits.
-5. **Before pushing:** `npm run build && npm run lint && npm test` must all pass.
-6. **Before opening a PR:** Merge latest master into your branch, resolve any conflicts, run tests again.
-7. **Open a PR** into `master`.
+```bash
+# 1. Start from latest master
+git switch master
+git pull --ff-only origin master
+
+# 2. Check for overlapping work
+gh pr list   # Coordinate if someone is working on the same area
+
+# 3. Create a branch
+git switch -c <type>/<short-description>
+# Types: feat/, fix/, refactor/, docs/, chore/, test/
+# Examples: feat/title-generation, fix/socket-path-macos
+
+# 4. Make changes, commit frequently
+
+# 5. Before pushing — all must pass
+npm run build && npm run lint && npm test
+
+# 6. Before opening a PR — merge latest master
+git fetch origin master
+git merge origin/master   # Resolve any conflicts
+npm test                  # Run tests again after merge
+
+# 7. Push and open PR
+git push -u origin <branch-name>
+gh pr create
+```
 
 ### CI
 
-All PRs are checked by GitHub Actions across 4 platforms:
+All PRs are checked by GitHub Actions. All checks must pass before merging.
 
-- Lint + build
-- Unit tests: Linux x64, Linux ARM64, macOS ARM64, Windows x64
-- Integration tests: Linux x64, macOS ARM64, Windows x64
-- E2E tests: Linux x64, macOS ARM64
+| Check | Platforms |
+|-------|-----------|
+| Lint + build | Linux x64 |
+| Unit tests | Linux x64, Linux ARM64, macOS ARM64, Windows x64 |
+| Integration tests | Linux x64, macOS ARM64, Windows x64 |
+| E2E tests | Linux x64, macOS ARM64 |
 
-PRs must pass all CI checks before merging.
+### Where Things Go
 
-### Project Structure
-
-- **Code** goes in `src/`, tests in `test/`
-- **Documentation** lives in `docs/` — update it when architecture, schema, or protocol changes
-- **README.md** is user-facing — update it when CLI commands or configuration changes
+- **Code:** `src/`, tests in `test/`
+- **Documentation:** `docs/` — update when architecture, schema, or protocol changes
+- **README:** User-facing — update when CLI commands or configuration changes
 
 ## Tech Stack
 
