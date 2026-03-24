@@ -30,7 +30,7 @@ tessyn stop
 | `tessyn sessions list [--project <slug>] [--limit N]` | List indexed sessions |
 | `tessyn sessions show <id>` | Display session messages |
 | `tessyn search <query> [--project <slug>] [--role <role>]` | Full-text search across all sessions |
-| `tessyn titles [--limit N]` | Generate titles for untitled sessions via Claude Haiku |
+| `tessyn titles [--limit N]` | Generate titles for untitled sessions (requires `claude` CLI) |
 | `tessyn watch` | Stream daemon events in real-time |
 | `tessyn reindex` | Rebuild the entire index from JSONL files |
 
