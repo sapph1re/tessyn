@@ -1,0 +1,6 @@
+{"type":"system","timestamp":"2025-01-15T10:00:00Z","message":{"content":"Session started"},"session_id":"test-session-001"}
+{"type":"user","timestamp":"2025-01-15T10:00:05Z","message":{"role":"user","content":"Hello, can you help me with a bug in my auth module?"}}
+{"type":"assistant","timestamp":"2025-01-15T10:00:10Z","message":{"role":"assistant","content":[{"type":"text","text":"Of course! I'd be happy to help with your auth module bug. Can you describe the issue you're seeing?"}]}}
+{"type":"user","timestamp":"2025-01-15T10:01:00Z","message":{"role":"user","content":"Users are getting logged out randomly after about 30 minutes."}}
+{"type":"assistant","timestamp":"2025-01-15T10:01:15Z","message":{"role":"assistant","content":[{"type":"text","text":"That sounds like a session expiration issue. Let me check a few things:\n\n1. What's your session timeout configuration?\n2. Are you using JWT tokens or server-side sessions?\n3. Is this happening on all browsers or just specific ones?"}]}}
+{"type":"result","timestamp":"2025-01-15T10:01:16Z","session_id":"test-session-001","duration_ms":76000,"num_turns":2}

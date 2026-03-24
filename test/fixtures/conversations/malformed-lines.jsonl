@@ -1,0 +1,6 @@
+{"type":"system","timestamp":"2025-03-10T12:00:00Z","message":{"content":"Session started"},"session_id":"test-session-004"}
+{"type":"user","timestamp":"2025-03-10T12:00:05Z","message":{"role":"user","content":"First message"}}
+this is not valid json at all
+{"type":"assistant","timestamp":"2025-03-10T12:00:10Z","message":{"role":"assistant","content":[{"type":"text","text":"Response after malformed line"}]}}
+{"truncated json
+{"type":"user","timestamp":"2025-03-10T12:01:00Z","message":{"role":"user","content":"Second message after bad lines"}}

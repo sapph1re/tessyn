@@ -1,0 +1,3 @@
+{"type":"system","timestamp":"2025-04-01T08:00:00Z","message":{"content":"Session started"},"session_id":"test-session-crlf"}
+{"type":"user","timestamp":"2025-04-01T08:00:05Z","message":{"role":"user","content":"CRLF line ending test"}}
+{"type":"assistant","timestamp":"2025-04-01T08:00:10Z","message":{"role":"assistant","content":[{"type":"text","text":"Response"}]}}

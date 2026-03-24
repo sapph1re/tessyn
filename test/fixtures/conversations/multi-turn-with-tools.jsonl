@@ -1,0 +1,8 @@
+{"type":"system","timestamp":"2025-02-20T14:00:00Z","message":{"content":"Session started"},"session_id":"test-session-002"}
+{"type":"user","timestamp":"2025-02-20T14:00:05Z","message":{"role":"user","content":"Fix the TypeScript error in src/utils.ts"}}
+{"type":"assistant","timestamp":"2025-02-20T14:00:10Z","message":{"role":"assistant","content":[{"type":"text","text":"Let me read the file first."},{"type":"tool_use","name":"Read","input":{"file_path":"src/utils.ts"}}]}}
+{"type":"assistant","timestamp":"2025-02-20T14:00:15Z","message":{"role":"assistant","content":[{"type":"tool_result","text":"1: export function add(a: number, b: string) {\n2:   return a + b;\n3: }"}]}}
+{"type":"assistant","timestamp":"2025-02-20T14:00:20Z","message":{"role":"assistant","content":[{"type":"text","text":"I see the issue. The parameter `b` has type `string` but should be `number`. Let me fix that."},{"type":"tool_use","name":"Edit","input":{"file_path":"src/utils.ts","old_string":"b: string","new_string":"b: number"}}]}}
+{"type":"user","timestamp":"2025-02-20T14:01:00Z","message":{"role":"user","content":"Great, now add tests for it"}}
+{"type":"assistant","timestamp":"2025-02-20T14:01:10Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"I need to create a test file for the utils module. I'll use vitest since the project uses it."},{"type":"text","text":"I'll create tests for the `add` function."},{"type":"tool_use","name":"Write","input":{"file_path":"test/utils.test.ts","content":"import { add } from '../src/utils';\n\ntest('adds two numbers', () => {\n  expect(add(1, 2)).toBe(3);\n});"}}]}}
+{"type":"result","timestamp":"2025-02-20T14:01:11Z","session_id":"test-session-002","duration_ms":66000,"num_turns":3}

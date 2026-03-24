@@ -1,0 +1,159 @@
+// === Daemon State ===
+
+export type DaemonState = 'cold' | 'scanning' | 'caught_up' | 'degraded';
+
+export interface DaemonStatus {
+  state: DaemonState;
+  sessionsIndexed: number;
+  sessionsTotal: number;
+  uptime: number;
+  version: string;
+}
+
+// === Session Types ===
+
+export interface Session {
+  id: number;
+  provider: string;
+  externalId: string;
+  projectSlug: string;
+  projectPath: string | null;
+  title: string | null;
+  firstPrompt: string | null;
+  createdAt: number; // Unix epoch ms
+  updatedAt: number; // Unix epoch ms
+  messageCount: number;
+  jsonlPath: string;
+  jsonlByteOffset: number;
+  jsonlSize: number;
+  jsonlIdentity: string | null;
+  gitBranch: string | null;
+  gitRemote: string | null;
+  state: 'active' | 'deleted';
+}
+
+export interface SessionSummary {
+  id: number;
+  provider: string;
+  externalId: string;
+  projectSlug: string;
+  title: string | null;
+  firstPrompt: string | null;
+  createdAt: number;
+  updatedAt: number;
+  messageCount: number;
+  state: 'active' | 'deleted';
+}
+
+// === Message Types ===
+
+export type MessageRole = 'user' | 'assistant' | 'system';
+export type BlockType = 'text' | 'tool_use' | 'thinking' | 'tool_result';
+
+export interface Message {
+  id: number;
+  sessionId: number;
+  role: MessageRole;
+  content: string;
+  toolName: string | null;
+  toolInput: string | null;
+  timestamp: number; // Unix epoch ms
+  sequence: number;
+  blockType: BlockType | null;
+}
+
+// === JSONL Event Types ===
+
+export interface JsonlEvent {
+  type: string;
+  timestamp?: string;
+  message?: JsonlMessageContent;
+  session_id?: string;
+  // Byte range in the source file
+  byteStart: number;
+  byteEnd: number;
+  lineNumber: number;
+}
+
+export interface JsonlMessageContent {
+  role?: string;
+  content?: string | JsonlContentBlock[];
+  model?: string;
+}
+
+export interface JsonlContentBlock {
+  type: string;
+  text?: string;
+  name?: string;
+  input?: Record<string, unknown>;
+  thinking?: string;
+}
+
+// === Checkpoint ===
+
+export interface Checkpoint {
+  byteOffset: number;
+  fileSize: number;
+  identity: string | null;
+}
+
+// === Search ===
+
+export interface SearchResult {
+  sessionId: number;
+  messageId: number;
+  content: string;
+  role: MessageRole;
+  timestamp: number;
+  sessionTitle: string | null;
+  projectSlug: string;
+  rank: number;
+}
+
+export interface SearchOptions {
+  query: string;
+  projectSlug?: string;
+  role?: MessageRole;
+  limit?: number;
+  offset?: number;
+}
+
+// === Protocol ===
+
+export interface JsonRpcRequest {
+  jsonrpc: '2.0';
+  id: string | number;
+  method: string;
+  params?: Record<string, unknown>;
+}
+
+export interface JsonRpcResponse {
+  jsonrpc: '2.0';
+  id: string | number | null;
+  result?: unknown;
+  error?: JsonRpcError;
+}
+
+export interface JsonRpcNotification {
+  jsonrpc: '2.0';
+  method: string;
+  params?: Record<string, unknown>;
+}
+
+export interface JsonRpcError {
+  code: number;
+  message: string;
+  data?: unknown;
+}
+
+// Standard JSON-RPC error codes
+export const RPC_ERRORS = {
+  PARSE_ERROR: -32700,
+  INVALID_REQUEST: -32600,
+  METHOD_NOT_FOUND: -32601,
+  INVALID_PARAMS: -32602,
+  INTERNAL_ERROR: -32603,
+  // Custom codes
+  DAEMON_NOT_READY: -32000,
+  SESSION_NOT_FOUND: -32001,
+} as const;
