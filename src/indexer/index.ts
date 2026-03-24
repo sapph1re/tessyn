@@ -1,5 +1,4 @@
 import path from 'node:path';
-import fs from 'node:fs';
 import type Database from 'better-sqlite3';
 import { createLogger } from '../shared/logger.js';
 import { parseJsonlFile, getFileSize } from './jsonl-parser.js';

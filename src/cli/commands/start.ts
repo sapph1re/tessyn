@@ -1,10 +1,7 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createLogger } from '../../shared/logger.js';
 import { isDaemonRunning } from '../../daemon/lifecycle.js';
-
-const log = createLogger('cli:start');
 
 export async function startCommand(options: { daemon?: boolean }): Promise<void> {
   // Check if already running

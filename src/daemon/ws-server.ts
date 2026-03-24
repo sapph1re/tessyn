@@ -8,7 +8,7 @@ import { getWebSocketPort, getDataDir } from '../platform/paths.js';
 import { getStatus } from './lifecycle.js';
 import { handleRequest } from '../protocol/handlers.js';
 import { SubscriptionManager } from '../protocol/events.js';
-import { createNotification, parseRequest, createResponse, createErrorResponse, RPC_ERRORS } from '../protocol/types.js';
+import { createNotification, parseRequest, createResponse } from '../protocol/types.js';
 import type { JsonRpcNotification } from '../shared/types.js';
 
 const log = createLogger('ws-server');

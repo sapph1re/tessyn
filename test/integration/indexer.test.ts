@@ -137,7 +137,7 @@ describe('Indexer Integration', () => {
       const countBefore = queries.getSessionCount(db);
 
       // Full reindex
-      const { indexed, total } = fullReindex(db, tmpDir);
+      const { total } = fullReindex(db, tmpDir);
       const countAfter = queries.getSessionCount(db);
 
       expect(countAfter).toBe(countBefore);

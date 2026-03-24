@@ -25,8 +25,6 @@ describe('JSONL Parser', () => {
 
     it('should parse timestamps correctly', () => {
       const result = parseJsonlFile(path.join(FIXTURES, 'simple-chat.jsonl'));
-      const firstMessage = result.messages[0]!;
-      // System message content = "Session started"
       const firstUser = result.messages.find(m => m.role === 'user')!;
       expect(firstUser.timestamp).toBe(new Date('2025-01-15T10:00:05Z').getTime());
     });

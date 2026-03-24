@@ -1,4 +1,4 @@
-import type { JsonRpcRequest, JsonRpcResponse, JsonRpcNotification, JsonRpcError, RPC_ERRORS } from '../shared/types.js';
+import type { JsonRpcRequest, JsonRpcResponse, JsonRpcNotification, JsonRpcError } from '../shared/types.js';
 
 // Re-export for convenience
 export type { JsonRpcRequest, JsonRpcResponse, JsonRpcNotification, JsonRpcError };

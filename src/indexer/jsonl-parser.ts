@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { createLogger } from '../shared/logger.js';
-import type { JsonlEvent, JsonlContentBlock } from '../shared/types.js';
+import type { JsonlContentBlock } from '../shared/types.js';
 
 const log = createLogger('jsonl-parser');
 

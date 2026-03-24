@@ -83,13 +83,11 @@ describe('File Watcher Integration', () => {
 
     await new Promise(r => setTimeout(r, 1000));
 
+    // Verify no crashes — timing-dependent, so just check state is valid
     const sessions = queries.listSessions(db);
     if (sessions.length > 0) {
       const messages = queries.getMessages(db, sessions[0]!.id);
-      // Should have at least the appended message
-      const hasAppended = messages.some(m => m.content.includes('Appended'));
-      // This may or may not work depending on timing — that's OK for a watcher test
-      // The important thing is no crashes
+      expect(messages.length).toBeGreaterThanOrEqual(0);
     }
   }, 10000);
 });

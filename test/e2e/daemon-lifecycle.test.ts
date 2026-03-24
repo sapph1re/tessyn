@@ -92,10 +92,9 @@ describe('E2E: Daemon Lifecycle', () => {
       stdio: 'pipe',
     });
 
-    // Collect stderr for debugging
-    let stderr = '';
-    daemonProcess.stderr?.on('data', (data) => { stderr += data.toString(); });
-    daemonProcess.stdout?.on('data', (data) => { /* consume */ });
+    // Consume stdio to prevent blocking
+    daemonProcess.stderr?.on('data', () => {});
+    daemonProcess.stdout?.on('data', () => {});
 
     // Wait for daemon to start
     await waitForSocket(socketPath, 15000);
