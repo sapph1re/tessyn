@@ -24,6 +24,37 @@ Project documentation lives in `/docs`. Read it before making changes.
 
 **After changes:** Update `README.md` if user-facing behavior changed. Update `/docs` if architecture, schema, protocol, or conventions changed.
 
+## Git Workflow
+
+**Branching:** Trunk-based development. `master` is the trunk.
+
+- Create a new branch for every change: `<type>/<short-description>`
+  - Types: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`, `test/`
+  - Examples: `feat/title-generation`, `fix/socket-path-macos`, `docs/protocol-reference`
+- Open a pull request from the branch into `master`. Never push directly to `master`.
+- Short-lived branches — merge and delete promptly.
+
+**Before starting work:**
+
+1. `git pull origin master` — always start from the latest master.
+2. Check open PRs (`gh pr list`) — if anyone is working on overlapping code, **stop and flag it** before proceeding. Overlapping work = same files, same module, or same feature area.
+3. Create the branch: `git checkout -b <type>/<description>`
+
+**During work:**
+
+- Commit frequently. Small, logical commits are preferred over large batches.
+- No co-author tags in commit messages.
+- Run `npm run build && npm run lint && npm test` before pushing.
+
+**Before opening a PR:**
+
+1. `git fetch origin master` and check for new commits on master.
+2. If master has moved: `git merge origin/master` into your branch. Resolve any conflicts — review each conflict carefully, don't blindly accept either side.
+3. Run the full test suite one final time after the merge.
+4. Push and open the PR.
+
+**Push policy:** Push when tests pass and the feature/fix is complete. Don't push broken or partial work to the remote.
+
 ## Build & Test
 
 ```bash

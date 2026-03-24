@@ -111,6 +111,39 @@ npm run lint         # ESLint
 
 See [docs/](docs/) for architecture, schema, protocol, and testing documentation.
 
+## Contributing
+
+We use trunk-based development with `master` as the trunk.
+
+### Workflow
+
+1. **Pull the latest master:** `git pull origin master`
+2. **Check open PRs:** `gh pr list` — if someone is already working on the same area, coordinate before starting.
+3. **Create a branch:** `git checkout -b <type>/<short-description>`
+   - Types: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`, `test/`
+   - Examples: `feat/title-generation`, `fix/socket-path-macos`
+4. **Make your changes.** Commit frequently — small, logical commits.
+5. **Before pushing:** `npm run build && npm run lint && npm test` must all pass.
+6. **Before opening a PR:** Merge latest master into your branch, resolve any conflicts, run tests again.
+7. **Open a PR** into `master`.
+
+### CI
+
+All PRs are checked by GitHub Actions across 4 platforms:
+
+- Lint + build
+- Unit tests: Linux x64, Linux ARM64, macOS ARM64, Windows x64
+- Integration tests: Linux x64, macOS ARM64, Windows x64
+- E2E tests: Linux x64, macOS ARM64
+
+PRs must pass all CI checks before merging.
+
+### Project Structure
+
+- **Code** goes in `src/`, tests in `test/`
+- **Documentation** lives in `docs/` — update it when architecture, schema, or protocol changes
+- **README.md** is user-facing — update it when CLI commands or configuration changes
+
 ## Tech Stack
 
 - **TypeScript / Node.js** (>=22) — daemon and CLI
