@@ -66,9 +66,10 @@ export function getSocketPath(): string {
     return `\\\\.\\pipe\\tessyn-${username}`;
   }
 
-  // Unix: use short path in /tmp to stay under macOS 104-byte limit
+  // Unix: use /tmp explicitly (not os.tmpdir() which is long on macOS)
+  // to stay under macOS 104-byte socket path limit
   const uid = process.getuid?.() ?? process.pid;
-  return path.join(os.tmpdir(), `tessyn-${uid}.sock`);
+  return `/tmp/tessyn-${uid}.sock`;
 }
 
 /**

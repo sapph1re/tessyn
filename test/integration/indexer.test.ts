@@ -29,7 +29,7 @@ describe('Indexer Integration', () => {
   describe('indexSession', () => {
     it('should index a simple chat', () => {
       const changed = indexSession(db, path.join(FIXTURES, 'simple-chat.jsonl'), 'test-project');
-      expect(changed).toBe(true);
+      expect(changed).not.toBe('unchanged');
 
       const sessions = queries.listSessions(db);
       expect(sessions.length).toBe(1);
@@ -59,7 +59,7 @@ describe('Indexer Integration', () => {
 
     it('should handle malformed lines gracefully', () => {
       const changed = indexSession(db, path.join(FIXTURES, 'malformed-lines.jsonl'), 'test-project');
-      expect(changed).toBe(true);
+      expect(changed).not.toBe('unchanged');
 
       const sessions = queries.listSessions(db);
       const messages = queries.getMessages(db, sessions[0]!.id);
@@ -71,7 +71,7 @@ describe('Indexer Integration', () => {
     it('should skip unchanged files on re-index', () => {
       indexSession(db, path.join(FIXTURES, 'simple-chat.jsonl'), 'test-project');
       const changed = indexSession(db, path.join(FIXTURES, 'simple-chat.jsonl'), 'test-project');
-      expect(changed).toBe(false); // No changes
+      expect(changed).toBe('unchanged'); // No changes
     });
 
     it('should incrementally index when file grows', () => {
@@ -90,7 +90,7 @@ describe('Indexer Integration', () => {
       fs.appendFileSync(filePath, line2);
 
       const changed = indexSession(db, filePath, 'test-project');
-      expect(changed).toBe(true);
+      expect(changed).not.toBe('unchanged');
 
       sessions = queries.listSessions(db);
       messages = queries.getMessages(db, sessions[0]!.id);

@@ -1,4 +1,5 @@
 import net from 'node:net';
+import fs from 'node:fs';
 import type Database from 'better-sqlite3';
 import { createLogger } from '../shared/logger.js';
 import { getSocketPath } from '../platform/paths.js';
@@ -46,6 +47,10 @@ export function startIpcServer(db: Database.Database, socketPath?: string): Prom
     });
 
     server.listen(sock, () => {
+      // Restrict socket permissions on Unix (owner-only read/write)
+      if (process.platform !== 'win32') {
+        try { fs.chmodSync(sock, 0o600); } catch {}
+      }
       log.info('IPC server listening', { path: sock });
       resolve(server!);
     });

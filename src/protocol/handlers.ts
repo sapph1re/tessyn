@@ -63,14 +63,23 @@ export function handleRequest(db: Database.Database, raw: string): JsonRpcRespon
         if (!params.query) {
           return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required parameter: query');
         }
-        const results = queries.searchMessages(db, {
-          query: params.query,
-          projectSlug: params.projectSlug,
-          role: params.role,
-          limit: params.limit,
-          offset: params.offset,
-        });
-        return createResponse(request.id, { results, total: results.length });
+        try {
+          const results = queries.searchMessages(db, {
+            query: params.query,
+            projectSlug: params.projectSlug,
+            role: params.role,
+            limit: params.limit,
+            offset: params.offset,
+          });
+          return createResponse(request.id, { results, count: results.length });
+        } catch (err) {
+          // FTS5 MATCH syntax errors from user input should be INVALID_PARAMS
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes('fts5')) {
+            return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, `Invalid search query: ${msg}`);
+          }
+          throw err; // Re-throw non-FTS errors for the outer catch
+        }
       }
 
       case 'reindex': {

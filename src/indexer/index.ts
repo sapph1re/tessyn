@@ -1,20 +1,23 @@
 import path from 'node:path';
+import fs from 'node:fs';
 import type Database from 'better-sqlite3';
 import { createLogger } from '../shared/logger.js';
-import { parseJsonlFile } from './jsonl-parser.js';
+import { parseJsonlFile, getFileSize } from './jsonl-parser.js';
 import { decideCheckpointAction, buildCheckpoint, computeFileIdentity } from './checkpoint.js';
-import { discoverSessions, type DiscoveredSession } from './session-discovery.js';
-import { slugToPath } from './session-discovery.js';
+import { discoverSessions } from './session-discovery.js';
 import * as queries from '../db/queries.js';
 import type { Checkpoint } from '../shared/types.js';
 
 const log = createLogger('indexer');
 
+export type IndexEvent = 'created' | 'updated' | 'deleted' | 'unchanged';
+
 /**
  * Index a single JSONL file into the database.
  * Handles both initial indexing and incremental updates.
+ * Returns the type of change that occurred.
  */
-export function indexSession(db: Database.Database, jsonlPath: string, projectSlug: string): boolean {
+export function indexSession(db: Database.Database, jsonlPath: string, projectSlug: string): IndexEvent {
   const externalId = path.basename(jsonlPath, '.jsonl');
 
   // Check if we already have this session
@@ -27,31 +30,56 @@ export function indexSession(db: Database.Database, jsonlPath: string, projectSl
       }
     : null;
 
+  const isNew = !existingSession;
+
   // Decide what to do based on checkpoint
   const decision = decideCheckpointAction(jsonlPath, storedCheckpoint);
 
   switch (decision.action) {
     case 'skip':
-      return false;
+      return 'unchanged';
 
     case 'deleted': {
       if (existingSession) {
         queries.updateSessionMeta(db, existingSession.id, { state: 'deleted', updatedAt: Date.now() });
         log.info('Session marked as deleted', { externalId, path: jsonlPath });
       }
-      return true;
+      return 'deleted';
     }
 
     case 'full': {
-      // Full reparse — delete existing messages if any
-      if (existingSession) {
-        queries.deleteSessionMessages(db, existingSession.id);
+      // Full reparse: parse FIRST, then replace in a single transaction
+      const result = parseJsonlFile(jsonlPath, 0);
+      if (result.messages.length === 0 && !result.sessionId) {
+        return 'unchanged';
       }
-      return doIndex(db, jsonlPath, projectSlug, externalId, 0, existingSession?.id ?? null);
+      const actualFileSize = getFileSize(jsonlPath);
+
+      const runTransaction = db.transaction(() => {
+        // Delete old messages only after successful parse
+        if (existingSession) {
+          queries.deleteSessionMessages(db, existingSession.id);
+        }
+        return doIndex(db, jsonlPath, projectSlug, externalId, result, actualFileSize, existingSession?.id ?? null);
+      });
+
+      runTransaction();
+      return isNew ? 'created' : 'updated';
     }
 
     case 'incremental': {
-      return doIndex(db, jsonlPath, projectSlug, externalId, decision.fromByte, existingSession?.id ?? null);
+      const result = parseJsonlFile(jsonlPath, decision.fromByte);
+      if (result.messages.length === 0 && !result.sessionId) {
+        return 'unchanged';
+      }
+      const actualFileSize = getFileSize(jsonlPath);
+
+      const runTransaction = db.transaction(() => {
+        doIndex(db, jsonlPath, projectSlug, externalId, result, actualFileSize, existingSession?.id ?? null);
+      });
+
+      runTransaction();
+      return isNew ? 'created' : 'updated';
     }
   }
 }
@@ -61,44 +89,35 @@ function doIndex(
   jsonlPath: string,
   projectSlug: string,
   externalId: string,
-  fromByte: number,
+  result: ReturnType<typeof parseJsonlFile>,
+  actualFileSize: number,
   existingSessionId: number | null,
-): boolean {
-  const result = parseJsonlFile(jsonlPath, fromByte);
-
-  if (result.messages.length === 0 && !result.sessionId) {
-    // Nothing to index
-    return false;
-  }
-
+): void {
   const now = Date.now();
 
   // Use session_id from JSONL if discovered, otherwise use filename
   const effectiveExternalId = result.sessionId ?? externalId;
 
-  // Upsert session
-  const projectPath = slugToPath(projectSlug);
+  // Upsert session — store null for projectPath (lossy slug heuristic is unreliable)
   const sessionId = existingSessionId ?? queries.upsertSession(db, {
     provider: 'claude',
     externalId: effectiveExternalId,
     projectSlug,
-    projectPath,
+    projectPath: null,
     jsonlPath,
     createdAt: result.messages[0]?.timestamp ?? now,
     updatedAt: now,
   });
 
   if (result.messages.length > 0) {
-    // Compute sequence numbers based on existing message count + line position
-    const existingCount = existingSessionId ? queries.getMessageCount(db, sessionId) : 0;
-
-    const messagesWithSequence = result.messages.map((msg, i) => ({
+    // Use source line numbers as sequence keys for stable idempotent identity
+    const messagesWithSequence = result.messages.map((msg) => ({
       role: msg.role,
       content: msg.content,
       toolName: msg.toolName,
       toolInput: msg.toolInput,
       timestamp: msg.timestamp,
-      sequence: existingCount + i + 1,
+      sequence: msg.lineNumber, // Stable: derived from JSONL line position
       blockType: msg.blockType,
     }));
 
@@ -115,26 +134,23 @@ function doIndex(
     });
   }
 
-  // Update checkpoint
+  // Update checkpoint — store actual file size separately from parsed byte offset
   const identity = computeFileIdentity(jsonlPath);
-  const checkpoint = buildCheckpoint(result.lastByteOffset, result.lastByteOffset, identity);
+  const checkpoint = buildCheckpoint(result.lastByteOffset, actualFileSize, identity);
   queries.updateSessionCheckpoint(db, sessionId, checkpoint);
 
   log.info('Indexed session', {
     externalId: effectiveExternalId,
     messages: result.messages.length,
-    fromByte,
     toByte: result.lastByteOffset,
+    fileSize: actualFileSize,
     linesProcessed: result.linesProcessed,
     linesFailed: result.linesFailed,
   });
-
-  return true;
 }
 
 /**
  * Perform a full scan and index of all discovered sessions.
- * Returns the count of sessions indexed/updated.
  */
 export function fullScan(db: Database.Database, projectsDir?: string): { indexed: number; total: number } {
   const discovered = discoverSessions(projectsDir);
@@ -142,8 +158,8 @@ export function fullScan(db: Database.Database, projectsDir?: string): { indexed
 
   for (const session of discovered) {
     try {
-      const changed = indexSession(db, session.jsonlPath, session.projectSlug);
-      if (changed) indexed++;
+      const event = indexSession(db, session.jsonlPath, session.projectSlug);
+      if (event !== 'unchanged') indexed++;
     } catch (err) {
       log.error('Failed to index session', {
         path: session.jsonlPath,

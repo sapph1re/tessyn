@@ -40,12 +40,13 @@ export async function startWatcher(
       if (!parsed) continue;
 
       try {
-        const changed = indexSession(db, filePath, parsed.projectSlug);
-        if (changed && onEvent) {
-          // Determine event type based on whether file exists
-          const exists = fs.existsSync(filePath);
+        const event = indexSession(db, filePath, parsed.projectSlug);
+        if (event !== 'unchanged' && onEvent) {
+          const eventType = event === 'created' ? 'session.created'
+            : event === 'deleted' ? 'session.deleted'
+            : 'session.updated';
           onEvent({
-            type: exists ? 'session.updated' : 'session.deleted',
+            type: eventType,
             projectSlug: parsed.projectSlug,
             sessionFile: parsed.sessionFile,
             jsonlPath: filePath,
