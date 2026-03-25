@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","session_id":"stream-test-001","model":"claude-haiku-4-20250414","tools":["Read","Edit","Bash"],"cwd":"/home/user/project"}
+{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}},"session_id":"stream-test-001"}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}},"session_id":"stream-test-001"}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" world!"}},"session_id":"stream-test-001"}
+{"type":"stream_event","event":{"type":"content_block_stop","index":0},"session_id":"stream-test-001"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello world!"}]},"session_id":"stream-test-001"}
+{"type":"result","subtype":"success","is_error":false,"duration_ms":1500,"session_id":"stream-test-001","stop_reason":"end_turn","total_cost_usd":0.001,"usage":{"input_tokens":100,"output_tokens":5,"cache_read_input_tokens":50,"cache_creation_input_tokens":0}}

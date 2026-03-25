@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"stream-test-003","model":"claude-haiku-4-20250414","tools":[],"cwd":"/home/user"}
+{"type":"result","subtype":"error","is_error":true,"result":"Rate limit exceeded","session_id":"stream-test-003"}
