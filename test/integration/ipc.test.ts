@@ -26,7 +26,7 @@ describe('IPC Server/Client', () => {
     runMigrations(db);
 
     socketPath = getTestSocketPath();
-    await startIpcServer(db, socketPath);
+    await startIpcServer({ db }, socketPath);
   });
 
   afterEach(async () => {

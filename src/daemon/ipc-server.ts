@@ -1,9 +1,8 @@
 import net from 'node:net';
 import fs from 'node:fs';
-import type Database from 'better-sqlite3';
 import { createLogger } from '../shared/logger.js';
 import { getSocketPath } from '../platform/paths.js';
-import { handleRequest } from '../protocol/handlers.js';
+import { handleRequest, type HandlerContext } from '../protocol/handlers.js';
 
 const log = createLogger('ipc-server');
 
@@ -13,7 +12,7 @@ let server: net.Server | null = null;
  * Start the IPC server for CLI clients.
  * Uses Unix domain sockets on macOS/Linux and named pipes on Windows.
  */
-export function startIpcServer(db: Database.Database, socketPath?: string): Promise<net.Server> {
+export function startIpcServer(ctx: HandlerContext, socketPath?: string): Promise<net.Server> {
   const sock = socketPath ?? getSocketPath();
 
   return new Promise((resolve, reject) => {
@@ -30,7 +29,7 @@ export function startIpcServer(db: Database.Database, socketPath?: string): Prom
           buffer = buffer.substring(newlineIdx + 1);
 
           if (line) {
-            handleRequest(db, line).then((response) => {
+            handleRequest(ctx, line).then((response) => {
               conn.write(JSON.stringify(response) + '\n');
             }).catch((err) => {
               log.error('IPC handler error', { error: err instanceof Error ? err.message : String(err) });

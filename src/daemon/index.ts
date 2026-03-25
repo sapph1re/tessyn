@@ -32,11 +32,14 @@ export async function startDaemon(): Promise<void> {
   const db = initDatabase();
   onShutdown(() => closeDatabase());
 
+  // Build handler context (shared by IPC and WebSocket servers)
+  const ctx = { db };
+
   // Start servers
-  await startIpcServer(db);
+  await startIpcServer(ctx);
   onShutdown(() => stopIpcServer());
 
-  await startWsServer(db);
+  await startWsServer(ctx);
   onShutdown(() => stopWsServer());
 
   // Daemon is now serving (in cold state)

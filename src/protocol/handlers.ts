@@ -18,10 +18,20 @@ import {
 const log = createLogger('handlers');
 
 /**
+ * Context passed to the request handler.
+ * Provides access to all daemon subsystems that handlers may need.
+ */
+export interface HandlerContext {
+  db: Database.Database;
+  // runManager will be added in Step 6
+}
+
+/**
  * Handle a JSON-RPC request and return a response.
  * Some methods are async (title generation), so this returns a Promise.
  */
-export async function handleRequest(db: Database.Database, raw: string): Promise<JsonRpcResponse> {
+export async function handleRequest(ctx: HandlerContext, raw: string): Promise<JsonRpcResponse> {
+  const { db } = ctx;
   const request = parseRequest(raw);
 
   if (!request) {

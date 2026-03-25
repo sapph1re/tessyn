@@ -2,11 +2,10 @@ import { WebSocketServer, WebSocket } from 'ws';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type Database from 'better-sqlite3';
 import { createLogger } from '../shared/logger.js';
 import { getWebSocketPort, getDataDir } from '../platform/paths.js';
 import { getStatus } from './lifecycle.js';
-import { handleRequest } from '../protocol/handlers.js';
+import { handleRequest, type HandlerContext } from '../protocol/handlers.js';
 import { SubscriptionManager } from '../protocol/events.js';
 import { createNotification, parseRequest, createResponse } from '../protocol/types.js';
 import type { JsonRpcNotification } from '../shared/types.js';
@@ -39,7 +38,7 @@ function generateAuthToken(): string {
  * Start the WebSocket server for GUI frontends.
  * Requires auth token in the first message or via query parameter.
  */
-export function startWsServer(db: Database.Database, port?: number): Promise<WebSocketServer> {
+export function startWsServer(ctx: HandlerContext, port?: number): Promise<WebSocketServer> {
   const wsPort = port ?? getWebSocketPort();
   authToken = generateAuthToken();
 
@@ -109,7 +108,7 @@ export function startWsServer(db: Database.Database, port?: number): Promise<Web
         }
 
         // All other requests go through the standard handler
-        handleRequest(db, raw).then((response) => {
+        handleRequest(ctx, raw).then((response) => {
           ws.send(JSON.stringify(response));
         }).catch((err) => {
           log.error('WS handler error', { error: err instanceof Error ? err.message : String(err) });
