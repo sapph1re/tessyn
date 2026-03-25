@@ -9,12 +9,16 @@ export { RPC_ERRORS } from '../shared/types.js';
 export interface SessionsListParams {
   projectSlug?: string;
   state?: 'active' | 'deleted';
+  hidden?: boolean;   // default: false (exclude hidden)
+  archived?: boolean; // default: false (exclude archived)
   limit?: number;
   offset?: number;
 }
 
 export interface SessionsGetParams {
-  id: number;
+  id?: number;
+  externalId?: string;
+  provider?: string; // defaults to 'claude'
   limit?: number;
   offset?: number;
 }
@@ -27,8 +31,51 @@ export interface SearchParams {
   offset?: number;
 }
 
+export interface SessionRenameParams {
+  externalId: string;
+  provider?: string;
+  title: string;
+}
+
+export interface SessionHideParams {
+  externalId: string;
+  provider?: string;
+  hidden: boolean;
+}
+
+export interface SessionArchiveParams {
+  externalId: string;
+  provider?: string;
+  archived: boolean;
+}
+
+export interface SessionTogglesSetParams {
+  externalId: string;
+  provider?: string;
+  autoCommit?: boolean | null;
+  autoBranch?: boolean | null;
+  autoDocument?: boolean | null;
+  autoCompact?: boolean | null;
+}
+
+export interface SessionTogglesGetParams {
+  externalId: string;
+  provider?: string;
+}
+
+export interface SessionDraftSaveParams {
+  externalId: string;
+  provider?: string;
+  content: string;
+}
+
+export interface SessionDraftGetParams {
+  externalId: string;
+  provider?: string;
+}
+
 export interface SubscribeParams {
-  topics: string[]; // e.g., ['session.*', 'index.state_changed']
+  topics: string[];
 }
 
 export interface UnsubscribeParams {

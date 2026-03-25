@@ -13,6 +13,13 @@ import {
   type SessionsListParams,
   type SessionsGetParams,
   type SearchParams,
+  type SessionRenameParams,
+  type SessionHideParams,
+  type SessionArchiveParams,
+  type SessionTogglesSetParams,
+  type SessionTogglesGetParams,
+  type SessionDraftSaveParams,
+  type SessionDraftGetParams,
 } from './types.js';
 
 const log = createLogger('handlers');
@@ -56,18 +63,23 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
 
       case 'sessions.get': {
         const params = (request.params ?? {}) as unknown as SessionsGetParams;
-        if (!params.id) {
-          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required parameter: id');
+        let session;
+        if (params.externalId) {
+          session = queries.getSessionByExternalId(db, params.provider ?? 'claude', params.externalId);
+        } else if (params.id) {
+          session = queries.getSessionById(db, params.id);
+        } else {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required parameter: id or externalId');
         }
-        const session = queries.getSessionById(db, params.id);
         if (!session) {
-          return createErrorResponse(request.id, RPC_ERRORS.SESSION_NOT_FOUND, `Session not found: ${params.id}`);
+          return createErrorResponse(request.id, RPC_ERRORS.SESSION_NOT_FOUND, 'Session not found');
         }
-        const messages = queries.getMessages(db, params.id, {
+        const messages = queries.getMessages(db, session.id, {
           limit: params.limit,
           offset: params.offset,
         });
-        return createResponse(request.id, { session, messages });
+        const meta = queries.getSessionMeta(db, session.provider, session.externalId);
+        return createResponse(request.id, { session, messages, meta });
       }
 
       case 'search': {
@@ -102,6 +114,75 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
         const limit = (request.params?.['limit'] as number | undefined) ?? 50;
         const generated = await generateMissingTitles(db, limit);
         return createResponse(request.id, { generated });
+      }
+
+      case 'sessions.rename': {
+        const params = (request.params ?? {}) as unknown as SessionRenameParams;
+        if (!params.externalId || !params.title) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: externalId, title');
+        }
+        queries.upsertSessionMeta(db, params.provider ?? 'claude', params.externalId, { title: params.title });
+        return createResponse(request.id, { ok: true });
+      }
+
+      case 'sessions.hide': {
+        const params = (request.params ?? {}) as unknown as SessionHideParams;
+        if (!params.externalId || params.hidden === undefined) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: externalId, hidden');
+        }
+        queries.upsertSessionMeta(db, params.provider ?? 'claude', params.externalId, { hidden: params.hidden });
+        return createResponse(request.id, { ok: true });
+      }
+
+      case 'sessions.archive': {
+        const params = (request.params ?? {}) as unknown as SessionArchiveParams;
+        if (!params.externalId || params.archived === undefined) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: externalId, archived');
+        }
+        queries.upsertSessionMeta(db, params.provider ?? 'claude', params.externalId, { archived: params.archived });
+        return createResponse(request.id, { ok: true });
+      }
+
+      case 'sessions.toggles.get': {
+        const params = (request.params ?? {}) as unknown as SessionTogglesGetParams;
+        if (!params.externalId) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: externalId');
+        }
+        const toggles = queries.getSessionToggles(db, params.provider ?? 'claude', params.externalId);
+        return createResponse(request.id, { toggles });
+      }
+
+      case 'sessions.toggles.set': {
+        const params = (request.params ?? {}) as unknown as SessionTogglesSetParams;
+        if (!params.externalId) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: externalId');
+        }
+        const fields: Record<string, unknown> = {};
+        if (params.autoCommit !== undefined) fields['autoCommit'] = params.autoCommit;
+        if (params.autoBranch !== undefined) fields['autoBranch'] = params.autoBranch;
+        if (params.autoDocument !== undefined) fields['autoDocument'] = params.autoDocument;
+        if (params.autoCompact !== undefined) fields['autoCompact'] = params.autoCompact;
+        queries.upsertSessionMeta(db, params.provider ?? 'claude', params.externalId, fields);
+        const toggles = queries.getSessionToggles(db, params.provider ?? 'claude', params.externalId);
+        return createResponse(request.id, { ok: true, toggles });
+      }
+
+      case 'sessions.draft.get': {
+        const params = (request.params ?? {}) as unknown as SessionDraftGetParams;
+        if (!params.externalId) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: externalId');
+        }
+        const meta = queries.getSessionMeta(db, params.provider ?? 'claude', params.externalId);
+        return createResponse(request.id, { content: meta?.draft ?? null });
+      }
+
+      case 'sessions.draft.save': {
+        const params = (request.params ?? {}) as unknown as SessionDraftSaveParams;
+        if (!params.externalId || params.content === undefined) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: externalId, content');
+        }
+        queries.upsertSessionMeta(db, params.provider ?? 'claude', params.externalId, { draft: params.content });
+        return createResponse(request.id, { ok: true });
       }
 
       case 'shutdown': {
