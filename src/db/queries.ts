@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { Session, SessionSummary, Message, SearchResult, SearchOptions, Checkpoint } from '../shared/types.js';
+import type { Session, SessionSummary, Message, SearchResult, SearchOptions, Checkpoint, SessionMeta, SessionToggles } from '../shared/types.js';
 
 // === Session Queries ===
 
@@ -293,9 +293,79 @@ export function searchMessages(db: Database.Database, options: SearchOptions): S
   }));
 }
 
+// === Session Metadata (durable, survives reindex) ===
+
+export function upsertSessionMeta(
+  db: Database.Database,
+  provider: string,
+  externalId: string,
+  fields: Partial<Omit<SessionMeta, 'provider' | 'externalId'>>,
+): void {
+  const now = Date.now();
+  // Upsert: create if not exists, then update specified fields
+  db.prepare(`
+    INSERT INTO session_meta (provider, external_id, created_at, updated_at)
+    VALUES (@provider, @externalId, @now, @now)
+    ON CONFLICT(provider, external_id) DO UPDATE SET updated_at = @now
+  `).run({ provider, externalId, now });
+
+  const sets: string[] = ['updated_at = @now'];
+  const values: Record<string, unknown> = { provider, externalId, now };
+
+  if (fields.title !== undefined) { sets.push('title = @title'); values['title'] = fields.title; }
+  if (fields.hidden !== undefined) { sets.push('hidden = @hidden'); values['hidden'] = fields.hidden ? 1 : 0; }
+  if (fields.archived !== undefined) { sets.push('archived = @archived'); values['archived'] = fields.archived ? 1 : 0; }
+  if (fields.autoCommit !== undefined) { sets.push('auto_commit = @autoCommit'); values['autoCommit'] = fields.autoCommit === null ? null : fields.autoCommit ? 1 : 0; }
+  if (fields.autoBranch !== undefined) { sets.push('auto_branch = @autoBranch'); values['autoBranch'] = fields.autoBranch === null ? null : fields.autoBranch ? 1 : 0; }
+  if (fields.autoDocument !== undefined) { sets.push('auto_document = @autoDocument'); values['autoDocument'] = fields.autoDocument === null ? null : fields.autoDocument ? 1 : 0; }
+  if (fields.autoCompact !== undefined) { sets.push('auto_compact = @autoCompact'); values['autoCompact'] = fields.autoCompact === null ? null : fields.autoCompact ? 1 : 0; }
+  if (fields.draft !== undefined) { sets.push('draft = @draft'); values['draft'] = fields.draft; }
+  if (fields.modelOverride !== undefined) { sets.push('model_override = @modelOverride'); values['modelOverride'] = fields.modelOverride; }
+  if (fields.customInstructions !== undefined) { sets.push('custom_instructions = @customInstructions'); values['customInstructions'] = fields.customInstructions; }
+
+  if (sets.length > 1) {
+    db.prepare(`
+      UPDATE session_meta SET ${sets.join(', ')}
+      WHERE provider = @provider AND external_id = @externalId
+    `).run(values);
+  }
+}
+
+export function getSessionMeta(
+  db: Database.Database,
+  provider: string,
+  externalId: string,
+): SessionMeta | null {
+  const row = db.prepare(`
+    SELECT provider, external_id, title, hidden, archived,
+           auto_commit, auto_branch, auto_document, auto_compact,
+           draft, model_override, custom_instructions, created_at, updated_at
+    FROM session_meta
+    WHERE provider = ? AND external_id = ?
+  `).get(provider, externalId) as Record<string, unknown> | undefined;
+
+  return row ? mapSessionMetaRow(row) : null;
+}
+
+export function getSessionToggles(
+  db: Database.Database,
+  provider: string,
+  externalId: string,
+): SessionToggles {
+  const meta = getSessionMeta(db, provider, externalId);
+  return {
+    autoCommit: meta?.autoCommit ?? null,
+    autoBranch: meta?.autoBranch ?? null,
+    autoDocument: meta?.autoDocument ?? null,
+    autoCompact: meta?.autoCompact ?? null,
+  };
+}
+
 // === Cleanup ===
 
 export function deleteAllData(db: Database.Database): void {
+  // NOTE: session_meta is intentionally NOT deleted here.
+  // It contains user-owned durable metadata that must survive reindex.
   db.exec('DELETE FROM messages');
   db.exec('DELETE FROM sessions');
 }
@@ -350,5 +420,29 @@ function mapMessageRow(row: Record<string, unknown>): Message {
     timestamp: row['timestamp'] as number,
     sequence: row['sequence'] as number,
     blockType: row['block_type'] as 'text' | 'tool_use' | 'thinking' | 'tool_result' | null,
+  };
+}
+
+function intToBool(val: unknown): boolean | null {
+  if (val === null || val === undefined) return null;
+  return val === 1;
+}
+
+function mapSessionMetaRow(row: Record<string, unknown>): SessionMeta {
+  return {
+    provider: row['provider'] as string,
+    externalId: row['external_id'] as string,
+    title: row['title'] as string | null,
+    hidden: row['hidden'] === 1,
+    archived: row['archived'] === 1,
+    autoCommit: intToBool(row['auto_commit']),
+    autoBranch: intToBool(row['auto_branch']),
+    autoDocument: intToBool(row['auto_document']),
+    autoCompact: intToBool(row['auto_compact']),
+    draft: row['draft'] as string | null,
+    modelOverride: row['model_override'] as string | null,
+    customInstructions: row['custom_instructions'] as string | null,
+    createdAt: row['created_at'] as number,
+    updatedAt: row['updated_at'] as number,
   };
 }

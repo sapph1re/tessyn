@@ -18,7 +18,7 @@ describe('Schema & Migrations', () => {
   it('should create schema_version table', () => {
     runMigrations(db);
     const version = getCurrentVersion(db);
-    expect(version).toBe(1);
+    expect(version).toBe(2);
   });
 
   it('should create sessions table', () => {

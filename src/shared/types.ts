@@ -45,6 +45,32 @@ export interface SessionSummary {
   state: 'active' | 'deleted';
 }
 
+// === Session Metadata (durable, survives reindex) ===
+
+export interface SessionMeta {
+  provider: string;
+  externalId: string;
+  title: string | null;
+  hidden: boolean;
+  archived: boolean;
+  autoCommit: boolean | null;
+  autoBranch: boolean | null;
+  autoDocument: boolean | null;
+  autoCompact: boolean | null;
+  draft: string | null;
+  modelOverride: string | null;
+  customInstructions: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SessionToggles {
+  autoCommit: boolean | null;
+  autoBranch: boolean | null;
+  autoDocument: boolean | null;
+  autoCompact: boolean | null;
+}
+
 // === Message Types ===
 
 export type MessageRole = 'user' | 'assistant' | 'system';

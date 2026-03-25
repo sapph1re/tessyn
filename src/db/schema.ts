@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import { createLogger } from '../shared/logger.js';
 import { MigrationError } from '../shared/errors.js';
 import * as migration001 from './migrations/001-initial.js';
+import * as migration002 from './migrations/002-durable-metadata.js';
 
 const log = createLogger('schema');
 
@@ -12,6 +13,7 @@ interface Migration {
 
 const MIGRATIONS: Migration[] = [
   { version: migration001.version, up: migration001.up },
+  { version: migration002.version, up: migration002.up },
 ];
 
 /**
