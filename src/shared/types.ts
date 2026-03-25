@@ -8,6 +8,8 @@ export interface DaemonStatus {
   sessionsTotal: number;
   uptime: number;
   version: string;
+  protocolVersion: number;
+  capabilities: string[];
 }
 
 // === Session Types ===

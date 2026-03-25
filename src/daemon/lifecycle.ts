@@ -7,7 +7,8 @@ import { DaemonAlreadyRunningError } from '../shared/errors.js';
 
 const log = createLogger('lifecycle');
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
+const PROTOCOL_VERSION = 2;
 const startTime = Date.now();
 
 let state: DaemonState = 'cold';
@@ -36,6 +37,8 @@ export function getStatus(): DaemonStatus {
     sessionsTotal,
     uptime: Date.now() - startTime,
     version: VERSION,
+    protocolVersion: PROTOCOL_VERSION,
+    capabilities: ['search', 'meta', 'run', 'stream', 'titles'],
   };
 }
 

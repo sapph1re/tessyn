@@ -43,7 +43,7 @@ describe('IPC Server/Client', () => {
     expect(response.jsonrpc).toBe('2.0');
     expect(response.result).toBeTruthy();
     const result = response.result as Record<string, unknown>;
-    expect(result['version']).toBe('0.1.0');
+    expect(result['version']).toBe('0.2.0');
   });
 
   it('should list sessions (empty)', async () => {
