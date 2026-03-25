@@ -38,7 +38,9 @@ Returns daemon state.
   "sessionsIndexed": 94,
   "sessionsTotal": 94,
   "uptime": 12345,
-  "version": "0.1.0"
+  "version": "0.2.0",
+  "protocolVersion": 2,
+  "capabilities": ["search", "meta", "run", "stream", "titles"]
 }}
 ```
 
@@ -53,6 +55,8 @@ List sessions with optional filters.
 {"jsonrpc": "2.0", "id": 2, "method": "sessions.list", "params": {
   "projectSlug": "my-project",  // optional
   "state": "active",            // optional, default: "active"
+  "hidden": false,              // optional, default: false (exclude hidden)
+  "archived": false,            // optional, default: false (exclude archived)
   "limit": 20,                  // optional
   "offset": 0                   // optional
 }}
@@ -78,16 +82,23 @@ List sessions with optional filters.
 
 ### `sessions.get`
 
-Get a single session with its messages.
+Get a single session with its messages and durable metadata. Accepts either `id` (numeric) or `externalId` (stable UUID).
 
 ```json
-// Request
+// Request (by externalId — preferred)
 {"jsonrpc": "2.0", "id": 3, "method": "sessions.get", "params": {
-  "id": 1,
+  "externalId": "abc-123-def",
   "limit": 100,   // optional, for message pagination
   "offset": 0     // optional
 }}
+
+// Request (by numeric id — less stable, changes on reindex)
+{"jsonrpc": "2.0", "id": 3, "method": "sessions.get", "params": {
+  "id": 1
+}}
 ```
+
+Response includes `meta` (durable metadata) alongside `session` and `messages`.
 
 ### `search`
 
@@ -155,6 +166,89 @@ Gracefully stop the daemon.
 {"jsonrpc": "2.0", "id": 7, "method": "shutdown"}
 ```
 
+### `sessions.rename`
+
+Set a user title (stored in durable metadata, survives reindex).
+
+```json
+{"jsonrpc": "2.0", "id": 8, "method": "sessions.rename", "params": {
+  "externalId": "abc-123", "title": "My Session Title"
+}}
+```
+
+### `sessions.hide` / `sessions.archive`
+
+Hide or archive a session. Hidden/archived sessions are excluded from `sessions.list` by default.
+
+```json
+{"jsonrpc": "2.0", "id": 9, "method": "sessions.hide", "params": {
+  "externalId": "abc-123", "hidden": true
+}}
+```
+
+### `sessions.toggles.get` / `sessions.toggles.set`
+
+Per-session toggle state (auto-commit, auto-branch, auto-document, auto-compact).
+
+```json
+// Set
+{"jsonrpc": "2.0", "id": 10, "method": "sessions.toggles.set", "params": {
+  "externalId": "abc-123", "autoCommit": true, "autoBranch": false
+}}
+
+// Get
+{"jsonrpc": "2.0", "id": 11, "method": "sessions.toggles.get", "params": {
+  "externalId": "abc-123"
+}}
+```
+
+### `sessions.draft.save` / `sessions.draft.get`
+
+Persist and retrieve draft input text.
+
+```json
+// Save
+{"jsonrpc": "2.0", "id": 12, "method": "sessions.draft.save", "params": {
+  "externalId": "abc-123", "content": "My unsaved message"
+}}
+
+// Get
+{"jsonrpc": "2.0", "id": 13, "method": "sessions.draft.get", "params": {
+  "externalId": "abc-123"
+}}
+```
+
+### `run.send`
+
+Spawn a Claude session. Returns `runId` immediately; events stream via WebSocket.
+
+```json
+{"jsonrpc": "2.0", "id": 14, "method": "run.send", "params": {
+  "prompt": "Fix the bug in auth.ts",
+  "projectPath": "/path/to/project",
+  "externalId": "abc-123",  // optional: resume existing session
+  "model": "opus"           // optional: model override
+}}
+// Response: {"result": {"runId": "uuid"}}
+```
+
+### `run.cancel`
+
+Cancel an active run via SIGINT.
+
+```json
+{"jsonrpc": "2.0", "id": 15, "method": "run.cancel", "params": {"runId": "uuid"}}
+```
+
+### `run.list` / `run.get`
+
+List active runs or get a specific run's state.
+
+```json
+{"jsonrpc": "2.0", "id": 16, "method": "run.list"}
+{"jsonrpc": "2.0", "id": 17, "method": "run.get", "params": {"runId": "uuid"}}
+```
+
 ## WebSocket Events
 
 Push notifications sent to subscribed clients. JSON-RPC notifications (no `id` field).
@@ -199,6 +293,20 @@ Topic patterns: exact match (`session.created`), wildcard (`session.*`), or glob
 }}
 ```
 
+### Run Events (subscribe to `run.*`)
+
+```json
+{"jsonrpc": "2.0", "method": "run.started",    "params": {"runId": "uuid"}}
+{"jsonrpc": "2.0", "method": "run.system",     "params": {"runId": "uuid", "externalId": "session-uuid", "model": "claude-opus-4-6", "tools": ["Read", "Edit"]}}
+{"jsonrpc": "2.0", "method": "run.delta",      "params": {"runId": "uuid", "blockType": "text", "delta": "Hello", "blockIndex": 0}}
+{"jsonrpc": "2.0", "method": "run.block_start", "params": {"runId": "uuid", "blockType": "tool_use", "blockIndex": 1, "toolName": "Read"}}
+{"jsonrpc": "2.0", "method": "run.block_stop",  "params": {"runId": "uuid", "blockIndex": 1}}
+{"jsonrpc": "2.0", "method": "run.message",    "params": {"runId": "uuid", "role": "assistant", "content": [...]}}
+{"jsonrpc": "2.0", "method": "run.completed",  "params": {"runId": "uuid", "externalId": "session-uuid", "stopReason": "end_turn", "usage": {"inputTokens": 100, "outputTokens": 50, "durationMs": 3000, "costUsd": 0.05}}}
+{"jsonrpc": "2.0", "method": "run.failed",     "params": {"runId": "uuid", "error": "Rate limit exceeded"}}
+{"jsonrpc": "2.0", "method": "run.cancelled",  "params": {"runId": "uuid"}}
+```
+
 ## Error Codes
 
 Standard JSON-RPC 2.0 error codes plus custom codes:
@@ -212,3 +320,6 @@ Standard JSON-RPC 2.0 error codes plus custom codes:
 | -32603 | Internal Error | Server error |
 | -32000 | Daemon Not Ready | Index is still scanning |
 | -32001 | Session Not Found | Session ID doesn't exist |
+| -32002 | Run Not Found | Run ID doesn't exist |
+| -32003 | Run Limit Reached | Max concurrent runs exceeded |
+| -32004 | Claude Not Available | Claude CLI not installed or not in PATH |

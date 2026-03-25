@@ -37,6 +37,7 @@ src/
 ├── daemon/       # Entry point, lifecycle, IPC + WebSocket servers
 ├── cli/          # Commander-based CLI, IPC client
 ├── assist/       # Claude CLI integration (title generation)
+├── run/          # Claude process management (spawn, stream, cancel)
 ├── indexer/      # JSONL parser, checkpoint model, session discovery
 ├── db/           # SQLite, FTS5, migrations, prepared queries
 ├── watcher/      # @parcel/watcher, debounced change processing
@@ -82,9 +83,9 @@ Decision logic on file change:
 
 JSON-RPC 2.0 over newline-delimited JSON. Two layers:
 
-**Base layer (IPC + WebSocket):** `sessions.list`, `sessions.get`, `search`, `status`, `reindex`, `titles.generate`, `shutdown`
+**Base layer (IPC + WebSocket):** `sessions.list`, `sessions.get`, `search`, `status`, `reindex`, `titles.generate`, `shutdown`, `sessions.rename`, `sessions.hide`, `sessions.archive`, `sessions.toggles.get/set`, `sessions.draft.get/save`, `run.send`, `run.cancel`, `run.list`, `run.get`
 
-**Event layer (WebSocket only):** `session.created`, `session.updated`, `session.deleted`, `index.state_changed`. Clients subscribe via `subscribe`/`unsubscribe` RPC methods with wildcard topic matching (`session.*`, `*`).
+**Event layer (WebSocket only):** `session.created`, `session.updated`, `session.deleted`, `index.state_changed`, `run.started`, `run.system`, `run.delta`, `run.block_start/stop`, `run.message`, `run.completed`, `run.failed`, `run.cancelled`, `run.rate_limit`. Clients subscribe via `subscribe`/`unsubscribe` RPC methods with wildcard topic matching (`session.*`, `run.*`, `*`).
 
 ### IPC vs WebSocket
 

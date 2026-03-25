@@ -11,6 +11,7 @@ Project documentation lives in `/docs`. Read it before making changes.
 | `docs/protocol.md` | JSON-RPC API, IPC/WebSocket transport, events, error codes |
 | `docs/testing.md` | Test tiers, fixtures, CI matrix, cross-platform helpers |
 | `docs/cross-platform.md` | Platform-specific behavior, gotchas, environment variables |
+| `docs/desktop-integration.md` | Migration guide for Tessyn Desktop (from ClaudeMaximus) |
 
 ## Docs-First Workflow
 

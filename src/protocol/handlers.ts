@@ -123,6 +123,9 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
         if (!params.externalId || !params.title) {
           return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: externalId, title');
         }
+        if (!queries.sessionExists(db, params.provider ?? 'claude', params.externalId)) {
+          return createErrorResponse(request.id, RPC_ERRORS.SESSION_NOT_FOUND, 'Session not found');
+        }
         queries.upsertSessionMeta(db, params.provider ?? 'claude', params.externalId, { title: params.title });
         return createResponse(request.id, { ok: true });
       }
@@ -132,6 +135,9 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
         if (!params.externalId || params.hidden === undefined) {
           return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: externalId, hidden');
         }
+        if (!queries.sessionExists(db, params.provider ?? 'claude', params.externalId)) {
+          return createErrorResponse(request.id, RPC_ERRORS.SESSION_NOT_FOUND, 'Session not found');
+        }
         queries.upsertSessionMeta(db, params.provider ?? 'claude', params.externalId, { hidden: params.hidden });
         return createResponse(request.id, { ok: true });
       }
@@ -140,6 +146,9 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
         const params = (request.params ?? {}) as unknown as SessionArchiveParams;
         if (!params.externalId || params.archived === undefined) {
           return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: externalId, archived');
+        }
+        if (!queries.sessionExists(db, params.provider ?? 'claude', params.externalId)) {
+          return createErrorResponse(request.id, RPC_ERRORS.SESSION_NOT_FOUND, 'Session not found');
         }
         queries.upsertSessionMeta(db, params.provider ?? 'claude', params.externalId, { archived: params.archived });
         return createResponse(request.id, { ok: true });
@@ -158,6 +167,9 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
         const params = (request.params ?? {}) as unknown as SessionTogglesSetParams;
         if (!params.externalId) {
           return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: externalId');
+        }
+        if (!queries.sessionExists(db, params.provider ?? 'claude', params.externalId)) {
+          return createErrorResponse(request.id, RPC_ERRORS.SESSION_NOT_FOUND, 'Session not found');
         }
         const fields: Record<string, unknown> = {};
         if (params.autoCommit !== undefined) fields['autoCommit'] = params.autoCommit;
@@ -183,6 +195,9 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
         if (!params.externalId || params.content === undefined) {
           return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: externalId, content');
         }
+        if (!queries.sessionExists(db, params.provider ?? 'claude', params.externalId)) {
+          return createErrorResponse(request.id, RPC_ERRORS.SESSION_NOT_FOUND, 'Session not found');
+        }
         queries.upsertSessionMeta(db, params.provider ?? 'claude', params.externalId, { draft: params.content });
         return createResponse(request.id, { ok: true });
       }
@@ -190,6 +205,10 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
       case 'run.send': {
         if (!ctx.runManager) {
           return createErrorResponse(request.id, RPC_ERRORS.INTERNAL_ERROR, 'RunManager not initialized');
+        }
+        const { isClaudeAvailable } = await import('../assist/titles.js');
+        if (!(await isClaudeAvailable())) {
+          return createErrorResponse(request.id, RPC_ERRORS.CLAUDE_NOT_AVAILABLE, 'Claude CLI not found. Install it first.');
         }
         const params = request.params as unknown as RunSendParams | undefined;
         if (!params?.prompt || !params?.projectPath) {

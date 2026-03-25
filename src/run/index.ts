@@ -116,25 +116,14 @@ export class RunManager {
     // Prevent Claude from refusing to run inside another Claude
     delete env['CLAUDECODE'];
 
-    let proc: ChildProcess;
-    try {
-      proc = spawn('claude', args, {
-        cwd: params.projectPath,
-        env,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-    } catch (err) {
-      // On Windows, claude may be a .cmd file — retry via cmd.exe
-      if (process.platform === 'win32') {
-        proc = spawn('cmd.exe', ['/c', 'claude', ...args], {
-          cwd: params.projectPath,
-          env,
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-      } else {
-        throw err;
-      }
-    }
+    // On Windows, spawn with shell:true so .cmd shims work
+    // (shell:true is safe here because args are passed as an array, not a string)
+    const proc = spawn('claude', args, {
+      cwd: params.projectPath,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: process.platform === 'win32',
+    });
 
     const activeRun: ActiveRun = { run, process: proc };
     this.runs.set(runId, activeRun);

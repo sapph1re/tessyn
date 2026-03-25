@@ -102,29 +102,43 @@ export function listSessions(
   options?: {
     projectSlug?: string;
     state?: 'active' | 'deleted';
+    hidden?: boolean;
+    archived?: boolean;
     limit?: number;
     offset?: number;
   },
 ): SessionSummary[] {
   let sql = `
-    SELECT id, provider, external_id, project_slug, title, first_prompt,
-           created_at, updated_at, message_count, state
-    FROM sessions WHERE 1=1
+    SELECT s.id, s.provider, s.external_id, s.project_slug,
+           COALESCE(m.title, s.title) as title,
+           s.first_prompt, s.created_at, s.updated_at,
+           s.message_count, s.state
+    FROM sessions s
+    LEFT JOIN session_meta m ON s.provider = m.provider AND s.external_id = m.external_id
+    WHERE 1=1
   `;
   const params: Record<string, unknown> = {};
 
   if (options?.projectSlug) {
-    sql += ' AND project_slug = @projectSlug';
+    sql += ' AND s.project_slug = @projectSlug';
     params['projectSlug'] = options.projectSlug;
   }
   if (options?.state) {
-    sql += ' AND state = @state';
+    sql += ' AND s.state = @state';
     params['state'] = options.state;
   } else {
-    sql += " AND state = 'active'";
+    sql += " AND s.state = 'active'";
   }
 
-  sql += ' ORDER BY updated_at DESC';
+  // Filter hidden/archived (default: exclude both)
+  if (options?.hidden !== true) {
+    sql += ' AND (m.hidden IS NULL OR m.hidden = 0)';
+  }
+  if (options?.archived !== true) {
+    sql += ' AND (m.archived IS NULL OR m.archived = 0)';
+  }
+
+  sql += ' ORDER BY s.updated_at DESC';
 
   if (options?.limit) {
     sql += ' LIMIT @limit';
@@ -137,6 +151,11 @@ export function listSessions(
 
   const rows = db.prepare(sql).all(params) as Record<string, unknown>[];
   return rows.map(mapSessionSummaryRow);
+}
+
+export function sessionExists(db: Database.Database, provider: string, externalId: string): boolean {
+  const row = db.prepare('SELECT 1 FROM sessions WHERE provider = ? AND external_id = ?').get(provider, externalId);
+  return !!row;
 }
 
 export function getSessionCheckpoint(db: Database.Database, sessionId: number): Checkpoint | null {
