@@ -5,9 +5,8 @@ Tessyn is a background daemon that indexes Claude Code session files into a loca
 ## Quick Start
 
 ```bash
-# Install dependencies and build
-npm install
-npm run build
+# Install globally
+npm install -g tessyn
 
 # Start the daemon (foreground)
 tessyn start
@@ -18,6 +17,16 @@ tessyn sessions list
 tessyn search "auth bug"
 tessyn search "refactor" --project my-project --role assistant
 tessyn stop
+```
+
+Or from source:
+
+```bash
+git clone https://github.com/sapph1re/tessyn.git
+cd tessyn
+npm install
+npm run build
+npm install -g .
 ```
 
 ## CLI Commands
