@@ -1,7 +1,7 @@
 {
   "name": "tessyn",
   "version": "0.2.0",
-  "description": "Background daemon that indexes Claude Code sessions into searchable SQLite with full-text search. Cross-session search, session history, and a stable API for developer workflow tools.",
+  "description": "Background daemon that indexes Claude Code sessions into searchable SQLite with full-text search. Cross-session search, session history, and CLI for developer workflow tools.",
   "type": "module",
   "engines": {
     "node": ">=22.0.0"
@@ -9,19 +9,15 @@
   "files": [
     "dist"
   ],
-  "exports": {
-    ".": {
-      "import": "./dist/daemon/index.js",
-      "types": "./dist/daemon/index.d.ts"
-    }
-  },
   "bin": {
     "tessyn": "./dist/cli/index.js"
   },
   "scripts": {
+    "clean": "rm -rf dist",
     "build": "tsc",
     "dev": "tsc --watch",
-    "prepublishOnly": "npm run build && npm test",
+    "prepack": "npm run clean && npm run build",
+    "prepublishOnly": "npm run lint && npm test",
     "test": "vitest run",
     "test:unit": "vitest run test/unit",
     "test:integration": "vitest run test/integration",

@@ -1,11 +1,18 @@
 # Tessyn
 
-Tessyn is a background daemon that indexes Claude Code session files into a local SQLite database with full-text search. It watches for filesystem changes, parses JSONL in real time, and serves the indexed data over IPC and WebSocket. This gives you cross-session search, session history, and a stable API for building developer tools — desktop apps, VS Code extensions, TUIs, or anything else — on top of your Claude Code workflow.
+Tessyn is a background daemon that indexes Claude Code session files into a local SQLite database with full-text search. It watches for filesystem changes, parses JSONL in real time, and serves the indexed data over IPC and WebSocket. This gives you cross-session search, session history, and a CLI for developer workflow tools on top of your Claude Code sessions.
+
+## Prerequisites
+
+- **Node.js >= 22** (required)
+- **Claude Code CLI** (optional, needed for title generation and `run.send`)
+- macOS, Linux, or Windows
+- Native build tools may be needed if prebuilt binaries aren't available for your platform (Xcode CLT on macOS, `build-essential` on Linux, MSVC Build Tools on Windows)
 
 ## Quick Start
 
 ```bash
-# Install globally
+# Install globally (requires Node >= 22)
 npm install -g tessyn
 
 # Start the daemon (foreground)
