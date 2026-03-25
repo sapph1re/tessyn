@@ -10,6 +10,9 @@ import { startIpcServer, stopIpcServer } from './ipc-server.js';
 import { startWsServer, stopWsServer, broadcastNotification } from './ws-server.js';
 import { sessionCreated, sessionUpdated, sessionDeleted, indexStateChanged } from '../protocol/events.js';
 import { generateMissingTitles } from '../assist/titles.js';
+import { RunManager } from '../run/index.js';
+import { createNotification } from '../protocol/types.js';
+import type { RunEvent } from '../run/types.js';
 
 const log = createLogger('daemon');
 
@@ -32,8 +35,16 @@ export async function startDaemon(): Promise<void> {
   const db = initDatabase();
   onShutdown(() => closeDatabase());
 
+  // Initialize run manager for Claude process management
+  const runManager = new RunManager(db);
+  runManager.onEvent((event: RunEvent) => {
+    // Forward all run events to WebSocket subscribers
+    broadcastNotification(createNotification(event.type, event as unknown as Record<string, unknown>));
+  });
+  onShutdown(() => runManager.cancelAll());
+
   // Build handler context (shared by IPC and WebSocket servers)
-  const ctx = { db };
+  const ctx = { db, runManager };
 
   // Start servers
   await startIpcServer(ctx);

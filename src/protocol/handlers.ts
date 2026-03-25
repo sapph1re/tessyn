@@ -4,6 +4,8 @@ import { getStatus } from '../daemon/lifecycle.js';
 import * as queries from '../db/queries.js';
 import { fullReindex } from '../indexer/index.js';
 import { generateMissingTitles } from '../assist/titles.js';
+import type { RunManager } from '../run/index.js';
+import type { RunSendParams } from '../run/types.js';
 import {
   createResponse,
   createErrorResponse,
@@ -30,7 +32,7 @@ const log = createLogger('handlers');
  */
 export interface HandlerContext {
   db: Database.Database;
-  // runManager will be added in Step 6
+  runManager?: RunManager;
 }
 
 /**
@@ -183,6 +185,60 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
         }
         queries.upsertSessionMeta(db, params.provider ?? 'claude', params.externalId, { draft: params.content });
         return createResponse(request.id, { ok: true });
+      }
+
+      case 'run.send': {
+        if (!ctx.runManager) {
+          return createErrorResponse(request.id, RPC_ERRORS.INTERNAL_ERROR, 'RunManager not initialized');
+        }
+        const params = request.params as unknown as RunSendParams | undefined;
+        if (!params?.prompt || !params?.projectPath) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: prompt, projectPath');
+        }
+        try {
+          const runId = await ctx.runManager.send(params);
+          return createResponse(request.id, { runId });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes('Max concurrent')) {
+            return createErrorResponse(request.id, RPC_ERRORS.RUN_LIMIT_REACHED, msg);
+          }
+          throw err;
+        }
+      }
+
+      case 'run.cancel': {
+        if (!ctx.runManager) {
+          return createErrorResponse(request.id, RPC_ERRORS.INTERNAL_ERROR, 'RunManager not initialized');
+        }
+        const runId = request.params?.['runId'] as string | undefined;
+        if (!runId) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: runId');
+        }
+        const cancelled = ctx.runManager.cancel(runId);
+        if (!cancelled) {
+          return createErrorResponse(request.id, RPC_ERRORS.RUN_NOT_FOUND, `Run not found: ${runId}`);
+        }
+        return createResponse(request.id, { ok: true });
+      }
+
+      case 'run.list': {
+        if (!ctx.runManager) {
+          return createResponse(request.id, { runs: [] });
+        }
+        return createResponse(request.id, { runs: ctx.runManager.getActiveRuns() });
+      }
+
+      case 'run.get': {
+        if (!ctx.runManager) {
+          return createErrorResponse(request.id, RPC_ERRORS.INTERNAL_ERROR, 'RunManager not initialized');
+        }
+        const id = request.params?.['runId'] as string | undefined;
+        if (!id) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: runId');
+        }
+        const run = ctx.runManager.getRun(id);
+        return createResponse(request.id, { run });
       }
 
       case 'shutdown': {
