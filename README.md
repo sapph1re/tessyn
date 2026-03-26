@@ -53,21 +53,27 @@ npm install -g .
 ## How It Works
 
 ```
-  Claude Code CLI          Tessyn Daemon            Frontends
-  ┌──────────────┐      ┌─────────────────┐     ┌────────────┐
-  │ Writes JSONL │─────→│ @parcel/watcher  │     │ Desktop    │
-  │ to disk      │      │ JSONL parser     │←───→│ VS Code    │
-  │              │      │ SQLite + FTS5    │ WS  │ TUI        │
-  └──────────────┘      │ IPC server       │←───→│ CLI        │
-                        └─────────────────┘ IPC  └────────────┘
+                         Tessyn Daemon
+  Claude Code CLI      ┌──────────────────┐      GUI Frontends
+  ┌──────────────┐     │ @parcel/watcher  │     ┌────────────┐
+  │              │────→│ JSONL parser     │     │ Desktop    │
+  │ Writes JSONL │     │ SQLite + FTS5    │←WS─→│ VS Code    │
+  │ to disk      │←────│ RunManager       │     │ TUI        │
+  │              │spawn│ IPC + WS servers │     └────────────┘
+  └──────────────┘     └───────┬──────────┘
+                               │IPC
+                        ┌──────┴──────┐
+                        │ tessyn CLI  │
+                        └─────────────┘
 ```
 
 1. **Claude Code** writes session data to `~/.claude/projects/<slug>/<id>.jsonl`
 2. **Tessyn's watcher** detects changes via native filesystem events
 3. **The indexer** parses new JSONL lines incrementally (byte-offset checkpoints, no re-reading)
 4. **SQLite + FTS5** stores messages with full-text search, filtered by project/role
-5. **IPC server** (Unix sockets / named pipes) serves the CLI
-6. **WebSocket server** (localhost, token-authenticated) serves GUI frontends with real-time push notifications
+5. **RunManager** spawns and streams Claude sessions on behalf of GUI clients (`run.send`)
+6. **IPC server** (Unix sockets / named pipes) serves the CLI
+7. **WebSocket server** (localhost, token-authenticated) serves GUI frontends with real-time push notifications
 
 JSONL files are the source of truth. Tessyn never writes to them. The SQLite database is a disposable index — `tessyn reindex` rebuilds it from scratch at any time.
 
