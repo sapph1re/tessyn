@@ -68,6 +68,18 @@ npm run lint         # ESLint
 npm run tessyn       # Run CLI (after build)
 ```
 
+## Releasing
+
+To publish a new version to npm:
+
+```bash
+npm version patch    # or minor / major
+git push && git push --tags
+gh release create v<version> --title "v<version>" --notes "Release notes here"
+```
+
+The GitHub Actions publish workflow handles the rest (lint, test, publish via Trusted Publishing — no tokens needed).
+
 ## Quick Reference
 
 - All timestamps: Unix epoch milliseconds (INTEGER in SQLite)
