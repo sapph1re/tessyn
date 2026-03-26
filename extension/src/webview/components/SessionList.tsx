@@ -2,9 +2,10 @@ import type { SessionSummary } from '../../protocol/types.js';
 
 interface SessionListProps {
   sessions: SessionSummary[];
+  onSelect?: (session: SessionSummary) => void;
 }
 
-export function SessionList({ sessions }: SessionListProps) {
+export function SessionList({ sessions, onSelect }: SessionListProps) {
   if (sessions.length === 0) {
     return (
       <div style={{ padding: '16px', textAlign: 'center', color: 'var(--vscode-descriptionForeground)' }}>
@@ -16,7 +17,7 @@ export function SessionList({ sessions }: SessionListProps) {
   return (
     <div style={{ overflow: 'auto', flex: 1 }}>
       {sessions.map((session) => (
-        <SessionItem key={session.externalId} session={session} />
+        <SessionItem key={session.externalId} session={session} onSelect={onSelect} />
       ))}
     </div>
   );
@@ -24,9 +25,10 @@ export function SessionList({ sessions }: SessionListProps) {
 
 interface SessionItemProps {
   session: SessionSummary;
+  onSelect?: (session: SessionSummary) => void;
 }
 
-function SessionItem({ session }: SessionItemProps) {
+function SessionItem({ session, onSelect }: SessionItemProps) {
   const title = session.title || session.firstPrompt?.slice(0, 80) || 'Untitled session';
   const timeAgo = formatRelativeTime(session.updatedAt);
 
@@ -37,6 +39,7 @@ function SessionItem({ session }: SessionItemProps) {
         cursor: 'pointer',
         borderBottom: '1px solid var(--vscode-panel-border)',
       }}
+      onClick={() => onSelect?.(session)}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLDivElement).style.backgroundColor = 'var(--vscode-list-hoverBackground)';
       }}

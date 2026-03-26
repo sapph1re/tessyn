@@ -86,7 +86,16 @@ export class TessynSidebarProvider implements vscode.WebviewViewProvider {
     // Forward RPC calls to daemon
     if (msg.type === 'rpc' && msg.params) {
       const method = msg.params['method'] as string;
-      const rpcParams = msg.params['params'] as Record<string, unknown> | undefined;
+      let rpcParams = msg.params['params'] as Record<string, unknown> | undefined;
+
+      // Inject workspace path for run.send if not provided
+      if (method === 'run.send' && rpcParams && !rpcParams['projectPath']) {
+        const folders = vscode.workspace.workspaceFolders;
+        if (folders && folders.length > 0) {
+          rpcParams = { ...rpcParams, projectPath: folders[0].uri.fsPath };
+        }
+      }
+
       try {
         const result = await this.client.call(method, rpcParams);
         this.postMessage({ type: 'rpc.result', requestId: msg.requestId, result });
