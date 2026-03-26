@@ -3,6 +3,7 @@ import type { StateStore, StoreAspect } from '../state/store.js';
 
 export class TessynStatusBar implements vscode.Disposable {
   private item: vscode.StatusBarItem;
+  private usageItem: vscode.StatusBarItem;
   private disposables: vscode.Disposable[] = [];
 
   constructor(private store: StateStore) {
@@ -11,10 +12,16 @@ export class TessynStatusBar implements vscode.Disposable {
     this.update();
     this.item.show();
 
+    this.usageItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
+    this.usageItem.command = 'tessyn.showStatus';
+
     this.disposables.push(
       store.onChange((aspect: StoreAspect) => {
         if (aspect === 'connection' || aspect === 'status') {
           this.update();
+        }
+        if (aspect === 'runs') {
+          this.updateUsage();
         }
       })
     );
@@ -59,8 +66,20 @@ export class TessynStatusBar implements vscode.Disposable {
     }
   }
 
+  private updateUsage(): void {
+    const runs = this.store.getActiveRuns();
+    if (runs.length > 0) {
+      this.usageItem.text = `$(pulse) ${runs.length} active run${runs.length > 1 ? 's' : ''}`;
+      this.usageItem.tooltip = runs.map(r => `${r.runId.slice(0, 8)}: ${r.state}`).join('\n');
+      this.usageItem.show();
+    } else {
+      this.usageItem.hide();
+    }
+  }
+
   dispose(): void {
     this.item.dispose();
+    this.usageItem.dispose();
     for (const d of this.disposables) d.dispose();
   }
 }

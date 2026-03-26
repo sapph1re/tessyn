@@ -5,6 +5,7 @@ import { ChatView } from './components/ChatView.js';
 import { InputArea } from './components/InputArea.js';
 import { SessionActions } from './components/SessionActions.js';
 import { SearchView } from './components/SearchView.js';
+import { UsageBar } from './components/UsageBar.js';
 import { useStream } from './hooks/useStream.js';
 import { useMessages } from './hooks/useMessages.js';
 import { useDraft } from './hooks/useDraft.js';
@@ -215,6 +216,11 @@ export function App() {
           streamError={stream.error}
         />
       )}
+
+      <UsageBar
+        usage={stream.usage}
+        rateLimitRetryAt={null}
+      />
 
       <InputArea
         onSend={handleSend}
