@@ -19,8 +19,10 @@ export function useDraft(externalId: string | null) {
       return;
     }
 
+    let cancelled = false;
     rpc<{ draft: string | null }>('sessions.draft.get', { externalId })
       .then(result => {
+        if (cancelled) return;
         const restored = result?.draft ?? '';
         setDraft(restored);
         lastSavedRef.current = restored;
@@ -28,6 +30,8 @@ export function useDraft(externalId: string | null) {
       .catch(() => {
         // Ignore — draft is nice-to-have
       });
+
+    return () => { cancelled = true; };
   }, [externalId]);
 
   // Save draft with debounce

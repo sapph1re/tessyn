@@ -10,6 +10,7 @@ import type { DaemonStatus, SessionSummary, Run } from '../protocol/types.js';
 export class StateSync implements Disposable {
   private disposables: Disposable[] = [];
   private currentProjectSlug: string | undefined;
+  private fetchGeneration = 0; // Guards against stale RPC responses
 
   constructor(
     private client: TessynClient,
@@ -41,9 +42,11 @@ export class StateSync implements Disposable {
    * Fetch full state from daemon. Called on initial connect and after reconnect.
    */
   async fetchFullState(): Promise<void> {
+    const gen = ++this.fetchGeneration;
     try {
       // Fetch daemon status
       const status = await this.client.call<DaemonStatus>('status');
+      if (gen !== this.fetchGeneration) return; // Stale response
       this.store.updateDaemonStatus(status);
 
       // Fetch sessions for current project (or all)
@@ -51,10 +54,17 @@ export class StateSync implements Disposable {
         projectSlug: this.currentProjectSlug,
         limit: 200,
       });
+      if (gen !== this.fetchGeneration) return; // Stale response
       this.store.updateSessions(result.sessions);
 
       // Fetch active runs
       const runResult = await this.client.call<{ runs: Run[] }>('run.list');
+      if (gen !== this.fetchGeneration) return; // Stale response
+      // Replace all runs atomically instead of additive setActiveRun
+      const currentRuns = this.store.getActiveRuns();
+      for (const run of currentRuns) {
+        this.store.removeActiveRun(run.runId);
+      }
       for (const run of runResult.runs) {
         this.store.setActiveRun(run);
       }
@@ -159,11 +169,13 @@ export class StateSync implements Disposable {
   }
 
   private async refetchSessions(): Promise<void> {
+    const gen = ++this.fetchGeneration;
     try {
       const result = await this.client.call<{ sessions: SessionSummary[] }>('sessions.list', {
         projectSlug: this.currentProjectSlug,
         limit: 200,
       });
+      if (gen !== this.fetchGeneration) return; // Stale response
       this.store.updateSessions(result.sessions);
     } catch {
       // Ignore — reconnect will handle it

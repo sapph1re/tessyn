@@ -83,8 +83,8 @@ export function SearchView({ onSelectResult, visible }: SearchViewProps) {
           </div>
         )}
 
-        {grouped.map(([sessionTitle, sessionResults]) => (
-          <div key={sessionTitle}>
+        {grouped.map(([sessionTitle, sessionResults], groupIndex) => (
+          <div key={`group-${groupIndex}`}>
             <div style={{
               padding: '4px 8px',
               fontSize: '11px',

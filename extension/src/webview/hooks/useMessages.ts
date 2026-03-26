@@ -16,17 +16,20 @@ export function useMessages(externalId: string | null) {
       return;
     }
 
+    let cancelled = false;
     setLoading(true);
     rpc<{ session: unknown; messages: Message[]; meta: unknown }>('sessions.get', { externalId })
       .then(result => {
-        setMessages(result?.messages ?? []);
+        if (!cancelled) setMessages(result?.messages ?? []);
       })
       .catch(() => {
-        setMessages([]);
+        if (!cancelled) setMessages([]);
       })
       .finally(() => {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       });
+
+    return () => { cancelled = true; };
   }, [externalId]);
 
   // Refetch when session is updated (new messages from external sources)

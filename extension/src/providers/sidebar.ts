@@ -5,6 +5,7 @@ import type { TessynClient } from '../protocol/client.js';
 export class TessynSidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'tessyn.sidebar';
   private view?: vscode.WebviewView;
+  private viewDisposables: vscode.Disposable[] = [];
 
   constructor(
     private extensionUri: vscode.Uri,
@@ -17,6 +18,10 @@ export class TessynSidebarProvider implements vscode.WebviewViewProvider {
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken,
   ): void {
+    // Dispose previous listeners to prevent leaks on re-resolve
+    for (const d of this.viewDisposables) d.dispose();
+    this.viewDisposables = [];
+
     this.view = webviewView;
 
     webviewView.webview.options = {
@@ -27,19 +32,34 @@ export class TessynSidebarProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = this.getHtml(webviewView.webview);
 
     // Handle messages from the webview
-    webviewView.webview.onDidReceiveMessage((msg) => this.handleWebviewMessage(msg));
+    this.viewDisposables.push(
+      webviewView.webview.onDidReceiveMessage((msg) => this.handleWebviewMessage(msg))
+    );
 
     // When webview signals ready, send current state
-    webviewView.onDidChangeVisibility(() => {
-      if (webviewView.visible) {
-        this.pushFullState();
-      }
-    });
+    this.viewDisposables.push(
+      webviewView.onDidChangeVisibility(() => {
+        if (webviewView.visible) {
+          this.pushFullState();
+        }
+      })
+    );
 
     // Push state updates to webview
-    this.store.onChange((aspect: StoreAspect) => {
-      this.pushStateUpdate(aspect);
-    });
+    this.viewDisposables.push(
+      this.store.onChange((aspect: StoreAspect) => {
+        this.pushStateUpdate(aspect);
+      })
+    );
+
+    // Clean up when view is disposed
+    this.viewDisposables.push(
+      webviewView.onDidDispose(() => {
+        for (const d of this.viewDisposables) d.dispose();
+        this.viewDisposables = [];
+        this.view = undefined;
+      })
+    );
   }
 
   /**
