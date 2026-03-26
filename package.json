@@ -1,6 +1,6 @@
 {
   "name": "tessyn",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Background daemon that indexes Claude Code sessions into searchable SQLite with full-text search. Cross-session search, session history, and CLI for developer workflow tools.",
   "type": "module",
   "engines": {
