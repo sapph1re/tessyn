@@ -10,3 +10,8 @@ coverage/
 *.db-shm
 *.sock
 .DS_Store
+# Extension
+extension/node_modules/
+extension/out/
+extension/dist/
+extension/*.vsix
