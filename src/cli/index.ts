@@ -9,6 +9,7 @@ import { searchCommand } from './commands/search.js';
 import { reindexCommand } from './commands/reindex.js';
 import { titlesCommand } from './commands/titles.js';
 import { watchCommand } from './commands/watch.js';
+import { installSkillsCommand } from './commands/skills.js';
 
 const program = new Command();
 
@@ -58,17 +59,20 @@ sessions
 sessions
   .command('show <id>')
   .description('Show session details and messages')
-  .action(async (id) => {
-    await showSessionCommand(id);
+  .option('-l, --limit <n>', 'Limit number of messages')
+  .action(async (id, options) => {
+    await showSessionCommand(id, {
+      limit: options.limit ? parseInt(options.limit, 10) : undefined,
+    });
   });
 
 program
-  .command('search <query>')
+  .command('search <query...>')
   .description('Search across all sessions')
   .option('-p, --project <slug>', 'Filter by project')
   .option('-r, --role <role>', 'Filter by role (user/assistant/system)')
   .option('-l, --limit <n>', 'Limit results', '20')
-  .action(async (query, options) => {
+  .action(async (query: string[], options) => {
     await searchCommand(query, {
       project: options.project,
       role: options.role,
@@ -96,6 +100,19 @@ program
   .description('Stream daemon events in real-time')
   .action(async () => {
     await watchCommand();
+  });
+
+const skills = program
+  .command('skills')
+  .description('Manage Claude Code skills');
+
+skills
+  .command('install')
+  .description('Install Tessyn skills for Claude Code')
+  .option('--uninstall', 'Remove installed skills')
+  .option('--force', 'Overwrite existing skills even if not owned by Tessyn')
+  .action(async (options) => {
+    await installSkillsCommand(options);
   });
 
 program.parse();
