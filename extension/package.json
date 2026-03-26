@@ -1,0 +1,147 @@
+{
+  "name": "tessyn",
+  "displayName": "Tessyn",
+  "description": "AI session manager for VS Code — reliable sessions, full-text search, token transparency",
+  "version": "0.1.0",
+  "publisher": "tessyn",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Chat"
+  ],
+  "keywords": [
+    "ai",
+    "claude",
+    "session-management",
+    "search",
+    "agent"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tessyn",
+          "title": "Tessyn",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "tessyn": [
+        {
+          "type": "webview",
+          "id": "tessyn.sidebar",
+          "name": "Sessions"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "tessyn.newSession",
+        "title": "Tessyn: New Session"
+      },
+      {
+        "command": "tessyn.search",
+        "title": "Tessyn: Search Sessions"
+      },
+      {
+        "command": "tessyn.reindex",
+        "title": "Tessyn: Reindex Sessions"
+      },
+      {
+        "command": "tessyn.showStatus",
+        "title": "Tessyn: Show Daemon Status"
+      },
+      {
+        "command": "tessyn.sendSelection",
+        "title": "Tessyn: Send Selection to Claude"
+      },
+      {
+        "command": "tessyn.cancelRun",
+        "title": "Tessyn: Cancel Active Run"
+      },
+      {
+        "command": "tessyn.exportSession",
+        "title": "Tessyn: Export Session"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "tessyn.newSession",
+        "key": "ctrl+shift+t",
+        "mac": "cmd+shift+t"
+      },
+      {
+        "command": "tessyn.cancelRun",
+        "key": "escape",
+        "when": "view == tessyn.sidebar && tessyn.hasActiveRun"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "tessyn.sendSelection",
+          "when": "editorHasSelection",
+          "group": "tessyn"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Tessyn",
+      "properties": {
+        "tessyn.daemonPort": {
+          "type": "number",
+          "default": 9833,
+          "description": "WebSocket port for the Tessyn daemon"
+        },
+        "tessyn.autoConnect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically connect to the daemon on startup"
+        },
+        "tessyn.showTokenBudget": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show token usage in the status bar"
+        },
+        "tessyn.showCostPerSession": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show cumulative cost per session"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "dev": "node esbuild.mjs --watch",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "test:unit": "vitest run src/test/unit",
+    "test:watch": "vitest watch src/test/unit",
+    "validate": "tsc --noEmit && vitest run src/test/unit",
+    "package": "vsce package",
+    "sync-types": "node scripts/sync-types.mjs"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.24.0",
+    "eslint": "^9.39.4",
+    "ovsx": "^0.10.0",
+    "preact": "^10.25.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "env-paths": "^4.0.0",
+    "ws": "^8.20.0"
+  }
+}
