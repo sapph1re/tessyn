@@ -9,16 +9,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write  # Required for npm provenance / Trusted Publishing
+      id-token: write  # Required for npm Trusted Publishing (OIDC)
+    environment: publish  # Must match npm Trusted Publisher config
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24  # npm 11.x+ required for OIDC
           registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm run lint
       - run: npm test
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
