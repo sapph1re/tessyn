@@ -7,6 +7,8 @@ import { TessynSidebarProvider } from './providers/sidebar.js';
 import { TessynStatusBar } from './providers/status-bar.js';
 import { TessynDiffProvider } from './providers/diff.js';
 import { registerCommands } from './providers/commands.js';
+import { registerNotifications } from './providers/notifications.js';
+import { exportSession } from './providers/export.js';
 
 let client: TessynClient;
 let reconnect: ReconnectManager;
@@ -71,6 +73,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // Register all commands
   registerCommands(context, client, store, sidebarProvider, diffProvider);
+
+  // Register notifications
+  registerNotifications(context, client, store);
 
   // Refetch state on reconnect
   context.subscriptions.push(
