@@ -4,12 +4,13 @@ import { SessionList } from './components/SessionList.js';
 import { ChatView } from './components/ChatView.js';
 import { InputArea } from './components/InputArea.js';
 import { SessionActions } from './components/SessionActions.js';
+import { SearchView } from './components/SearchView.js';
 import { useStream } from './hooks/useStream.js';
 import { useMessages } from './hooks/useMessages.js';
 import { useDraft } from './hooks/useDraft.js';
-import type { SessionSummary, DaemonStatus } from '../protocol/types.js';
+import type { SessionSummary, DaemonStatus, SearchResult } from '../protocol/types.js';
 
-type View = 'sessions' | 'chat';
+type View = 'sessions' | 'chat' | 'search';
 
 interface AppState {
   connected: boolean;
@@ -31,7 +32,7 @@ export function App() {
   const { stream, resetStream } = useStream();
   const { draft, updateDraft, clearDraft } = useDraft(activeSession?.externalId ?? null);
 
-  // Listen for state pushes from extension host
+  // Listen for state pushes and action messages from extension host
   useEffect(() => {
     const unsubscribe = onMessage((msg) => {
       switch (msg.type) {
@@ -49,10 +50,19 @@ export function App() {
         case 'state.sessions':
           setState(prev => ({ ...prev, sessions: msg['sessions'] as SessionSummary[] }));
           break;
+        // Action messages from extension host commands
+        case 'action.search':
+          setView('search');
+          break;
+        case 'action.prefill':
+          if (msg['text'] && activeSession) {
+            updateDraft(draft + (msg['text'] as string));
+          }
+          break;
       }
     });
     return unsubscribe;
-  }, []);
+  }, [activeSession, draft, updateDraft]);
 
   // Update active session reference when sessions refresh
   useEffect(() => {
@@ -75,6 +85,15 @@ export function App() {
     setActiveSession(null);
     resetStream();
   }, [resetStream]);
+
+  const handleSearchResult = useCallback((result: SearchResult) => {
+    // Find the session in our list and open it
+    const session = state.sessions.find(s => s.id === result.sessionId);
+    if (session) {
+      handleSelectSession(session);
+    }
+    setView('chat');
+  }, [state.sessions, handleSelectSession]);
 
   const handleSend = useCallback(async (text: string) => {
     if (!activeSession) return;
@@ -114,6 +133,40 @@ export function App() {
         <p style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground)', opacity: 0.7 }}>
           Start the daemon with: <code>tessyn start</code>
         </p>
+      </div>
+    );
+  }
+
+  // Search view
+  if (view === 'search') {
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <div style={{
+          padding: '4px 8px',
+          borderBottom: '1px solid var(--vscode-panel-border)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}>
+          <button
+            onClick={() => setView('sessions')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--vscode-foreground)',
+              cursor: 'pointer',
+              padding: '2px 4px',
+              fontSize: '14px',
+            }}
+          >
+            &#8592;
+          </button>
+          <span style={{ fontSize: '12px', fontWeight: 600 }}>Search</span>
+        </div>
+        <SearchView
+          visible={true}
+          onSelectResult={handleSearchResult}
+        />
       </div>
     );
   }

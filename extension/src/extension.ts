@@ -5,6 +5,8 @@ import { StateStore } from './state/store.js';
 import { StateSync } from './state/sync.js';
 import { TessynSidebarProvider } from './providers/sidebar.js';
 import { TessynStatusBar } from './providers/status-bar.js';
+import { TessynDiffProvider } from './providers/diff.js';
+import { registerCommands } from './providers/commands.js';
 
 let client: TessynClient;
 let reconnect: ReconnectManager;
@@ -23,6 +25,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // Start state sync
   sync.start(projectSlug);
+
+  // Register diff provider
+  const diffProvider = new TessynDiffProvider();
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider('tessyn-diff', diffProvider),
+    diffProvider,
+  );
 
   // Register sidebar provider
   const sidebarProvider = new TessynSidebarProvider(context.extensionUri, store, client);
@@ -43,46 +52,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     })
   );
 
+  // Handle diff requests from webview
+  context.subscriptions.push(
+    client.onNotification((method, params) => {
+      if (method === 'run.block_start' && params) {
+        const toolName = params['toolName'] as string | undefined;
+        const toolInput = params['toolInput'] as Record<string, unknown> | undefined;
+        if (toolName && toolInput && (toolName === 'Edit' || toolName === 'Write')) {
+          diffProvider.showToolDiff(toolName, toolInput).catch(() => {});
+        }
+      }
+    })
+  );
+
   // Register status bar
   const statusBar = new TessynStatusBar(store);
   context.subscriptions.push(statusBar);
 
-  // Register commands
-  context.subscriptions.push(
-    vscode.commands.registerCommand('tessyn.showStatus', () => {
-      const status = store.daemonStatus;
-      if (!status) {
-        vscode.window.showInformationMessage('Tessyn: Not connected to daemon');
-        return;
-      }
-      vscode.window.showInformationMessage(
-        `Tessyn v${status.version} — ${status.state}, ${status.sessionsIndexed} sessions indexed, uptime ${formatUptime(status.uptime)}`
-      );
-    }),
-
-    vscode.commands.registerCommand('tessyn.reindex', async () => {
-      if (!client.connected) {
-        vscode.window.showWarningMessage('Tessyn: Not connected to daemon');
-        return;
-      }
-      try {
-        const result = await client.call<{ indexed: number; total: number }>('reindex');
-        vscode.window.showInformationMessage(`Tessyn: Reindexed ${result.indexed} of ${result.total} sessions`);
-      } catch (err) {
-        vscode.window.showErrorMessage(`Tessyn: Reindex failed — ${err instanceof Error ? err.message : err}`);
-      }
-    }),
-
-    vscode.commands.registerCommand('tessyn.newSession', () => {
-      // Focus the sidebar — actual session creation happens in the webview
-      vscode.commands.executeCommand('tessyn.sidebar.focus');
-    }),
-
-    vscode.commands.registerCommand('tessyn.search', () => {
-      vscode.commands.executeCommand('tessyn.sidebar.focus');
-      // TODO: Send search-focus message to webview
-    }),
-  );
+  // Register all commands
+  registerCommands(context, client, store, sidebarProvider, diffProvider);
 
   // Refetch state on reconnect
   context.subscriptions.push(
@@ -98,7 +86,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Auto-connect if configured
   const config = vscode.workspace.getConfiguration('tessyn');
   if (config.get<boolean>('autoConnect', true)) {
-    // Connect asynchronously — don't block activation
     reconnect.connectWithHandshake()
       .then(() => sync.fetchFullState())
       .catch(() => {
@@ -114,17 +101,5 @@ export function deactivate(): void {
 function getProjectSlug(): string | undefined {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) return undefined;
-  // Use the first workspace folder name as project slug
-  // This matches Claude Code's slug encoding: non-alphanumeric chars (except -) replaced with -
-  const folderPath = folders[0].uri.fsPath;
-  return folderPath.replace(/[^a-zA-Z0-9-]/g, '-');
-}
-
-function formatUptime(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  if (hours > 0) return `${hours}h ${minutes % 60}m`;
-  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-  return `${seconds}s`;
+  return folders[0].uri.fsPath.replace(/[^a-zA-Z0-9-]/g, '-');
 }

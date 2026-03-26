@@ -106,8 +106,15 @@ export class TessynSidebarProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private postMessage(msg: unknown): void {
+  /**
+   * Post a message to the webview. Public for use by commands module.
+   */
+  postMessageToWebview(msg: unknown): void {
     this.view?.webview.postMessage(msg);
+  }
+
+  private postMessage(msg: unknown): void {
+    this.postMessageToWebview(msg);
   }
 
   private getHtml(webview: vscode.Webview): string {

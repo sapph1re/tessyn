@@ -58,8 +58,41 @@
       {
         "command": "tessyn.showStatus",
         "title": "Tessyn: Show Daemon Status"
+      },
+      {
+        "command": "tessyn.sendSelection",
+        "title": "Tessyn: Send Selection to Claude"
+      },
+      {
+        "command": "tessyn.cancelRun",
+        "title": "Tessyn: Cancel Active Run"
+      },
+      {
+        "command": "tessyn.exportSession",
+        "title": "Tessyn: Export Session"
       }
     ],
+    "keybindings": [
+      {
+        "command": "tessyn.newSession",
+        "key": "ctrl+shift+t",
+        "mac": "cmd+shift+t"
+      },
+      {
+        "command": "tessyn.cancelRun",
+        "key": "escape",
+        "when": "view == tessyn.sidebar && tessyn.hasActiveRun"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "tessyn.sendSelection",
+          "when": "editorHasSelection",
+          "group": "tessyn"
+        }
+      ]
+    },
     "configuration": {
       "title": "Tessyn",
       "properties": {
