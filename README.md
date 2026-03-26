@@ -44,11 +44,33 @@ npm install -g .
 | `tessyn stop` | Stop the daemon |
 | `tessyn status` | Show daemon state, index stats, version |
 | `tessyn sessions list [--project <slug>] [--limit N]` | List indexed sessions |
-| `tessyn sessions show <id>` | Display session messages |
+| `tessyn sessions show <id> [--limit N]` | Display session messages |
 | `tessyn search <query> [--project <slug>] [--role <role>]` | Full-text search across all sessions |
 | `tessyn titles [--limit N]` | Generate titles for untitled sessions (requires `claude` CLI) |
 | `tessyn watch` | Stream daemon events in real-time |
 | `tessyn reindex` | Rebuild the entire index from JSONL files |
+| `tessyn skills install` | Install Claude Code skills (`/recall`, `/sessions`, `/session-context`) |
+| `tessyn skills install --uninstall` | Remove installed skills |
+
+## Claude Code Skills
+
+Tessyn ships with skills (slash commands) for Claude Code. Install them once:
+
+```bash
+tessyn skills install
+```
+
+Then use them in any Claude Code session:
+
+| Skill | Description |
+|-------|-------------|
+| `/recall <query>` | Search across all past sessions. Find previous conversations, implementations, and decisions. |
+| `/sessions` | Browse session history across all projects. See recent sessions, filter by project. |
+| `/session-context <id>` | Load a past session into the current conversation. Brings knowledge from a previous session without switching to it. |
+
+Skills require the Tessyn daemon to be running (`tessyn start -d`).
+
+To remove installed skills: `tessyn skills install --uninstall`
 
 ## How It Works
 

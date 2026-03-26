@@ -42,7 +42,10 @@ export async function listSessionsCommand(options: {
   }
 }
 
-export async function showSessionCommand(id: string): Promise<void> {
+export async function showSessionCommand(
+  id: string,
+  options?: { limit?: number },
+): Promise<void> {
   try {
     const sessionId = parseInt(id, 10);
     if (isNaN(sessionId)) {
@@ -50,7 +53,10 @@ export async function showSessionCommand(id: string): Promise<void> {
       process.exit(1);
     }
 
-    const response = await sendRequest('sessions.get', { id: sessionId });
+    const response = await sendRequest('sessions.get', {
+      id: sessionId,
+      limit: options?.limit,
+    });
 
     if (response.error) {
       console.error('Error:', response.error.message);

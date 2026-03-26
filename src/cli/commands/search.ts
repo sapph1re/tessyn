@@ -3,9 +3,10 @@ import { DaemonNotRunningError } from '../../shared/errors.js';
 import type { SearchResult } from '../../shared/types.js';
 
 export async function searchCommand(
-  query: string,
+  queryParts: string[],
   options: { project?: string; role?: string; limit?: number },
 ): Promise<void> {
+  const query = queryParts.join(' ');
   try {
     const response = await sendRequest('search', {
       query,
