@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDaemonRunning } from '../../daemon/lifecycle.js';
 
-export async function startCommand(options: { daemon?: boolean }): Promise<void> {
+export async function startCommand(options: { foreground?: boolean }): Promise<void> {
   // Check if already running
   const running = await isDaemonRunning();
   if (running) {
@@ -11,8 +11,13 @@ export async function startCommand(options: { daemon?: boolean }): Promise<void>
     return;
   }
 
-  if (options.daemon) {
-    // Background mode: spawn detached process
+  if (options.foreground) {
+    // Foreground mode: start the daemon in this process
+    console.log('Starting Tessyn daemon (foreground)...');
+    const { startDaemon } = await import('../../daemon/index.js');
+    await startDaemon();
+  } else {
+    // Background mode (default): spawn detached process
     const daemonScript = path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),
       '../../daemon/index.js',
@@ -26,10 +31,5 @@ export async function startCommand(options: { daemon?: boolean }): Promise<void>
 
     child.unref();
     console.log(`Tessyn daemon started in background (PID: ${child.pid})`);
-  } else {
-    // Foreground mode: start the daemon in this process
-    console.log('Starting Tessyn daemon (foreground)...');
-    const { startDaemon } = await import('../../daemon/index.js');
-    await startDaemon();
   }
 }

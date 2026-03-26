@@ -15,10 +15,9 @@ Tessyn is a background daemon that indexes Claude Code session files into a loca
 # Install globally (requires Node >= 22)
 npm install -g tessyn
 
-# Start the daemon (foreground)
+# Start the daemon
 tessyn start
 
-# In another terminal:
 tessyn status
 tessyn sessions list
 tessyn search "auth bug"
@@ -40,7 +39,7 @@ npm install -g .
 
 | Command | Description |
 |---------|-------------|
-| `tessyn start [--daemon]` | Start the daemon (foreground, or `-d` for background) |
+| `tessyn start [--foreground]` | Start the daemon (background by default, `-f` for foreground) |
 | `tessyn stop` | Stop the daemon |
 | `tessyn status` | Show daemon state, index stats, version |
 | `tessyn sessions list [--project <slug>] [--limit N]` | List indexed sessions |

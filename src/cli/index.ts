@@ -20,7 +20,7 @@ program
 program
   .command('start')
   .description('Start the Tessyn daemon')
-  .option('-d, --daemon', 'Run in background')
+  .option('-f, --foreground', 'Run in foreground instead of background')
   .action(async (options) => {
     await startCommand(options);
   });
