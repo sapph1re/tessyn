@@ -44,6 +44,11 @@ src/
 ├── protocol/     # JSON-RPC 2.0 types, handlers, event subscriptions
 ├── platform/     # Cross-platform paths, signals, installation
 └── shared/       # Types, errors, logger
+
+skills/             # Claude Code skills (installed via `tessyn skills install`)
+├── recall/         # /recall — full-text search across all sessions
+├── sessions/       # /sessions — browse session history
+└── session-context/ # /session-context — load past session into context
 ```
 
 ### Daemon (`src/daemon/`)
