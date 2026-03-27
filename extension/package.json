@@ -5,6 +5,10 @@
   "version": "0.1.0",
   "publisher": "tessyn",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sapph1re/tessyn"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -29,6 +33,14 @@
         {
           "id": "tessyn",
           "title": "Tessyn",
+          "icon": "resources/icon.svg",
+          "when": "!tessyn.supportsSecondarySidebar"
+        }
+      ],
+      "panel": [
+        {
+          "id": "tessyn-panel",
+          "title": "Tessyn",
           "icon": "resources/icon.svg"
         }
       ]
@@ -38,7 +50,15 @@
         {
           "type": "webview",
           "id": "tessyn.sidebar",
-          "name": "Sessions"
+          "name": "Sessions",
+          "when": "!tessyn.supportsSecondarySidebar"
+        }
+      ],
+      "tessyn-panel": [
+        {
+          "type": "webview",
+          "id": "tessyn.panel",
+          "name": "Tessyn"
         }
       ]
     },
@@ -142,6 +162,7 @@
   },
   "dependencies": {
     "env-paths": "^4.0.0",
+    "marked": "^17.0.5",
     "ws": "^8.20.0"
   }
 }

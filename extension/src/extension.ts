@@ -35,7 +35,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     diffProvider,
   );
 
-  // Register sidebar provider
+  // Register sidebar provider (activity bar — fallback)
   const sidebarProvider = new TessynSidebarProvider(context.extensionUri, store, client);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
@@ -45,11 +45,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     )
   );
 
-  // Forward streaming events to sidebar
+  // Register panel provider (bottom panel / secondary sidebar — preferred)
+  const panelProvider = new TessynSidebarProvider(context.extensionUri, store, client);
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      TessynSidebarProvider.panelViewType,
+      panelProvider,
+      { webviewOptions: { retainContextWhenHidden: true } },
+    )
+  );
+
+  // Forward streaming events to all view providers
+  const allProviders = [sidebarProvider, panelProvider];
   context.subscriptions.push(
     client.onNotification((method, params) => {
       if (method.startsWith('run.')) {
-        sidebarProvider.forwardEvent(method, params);
+        for (const p of allProviders) p.forwardEvent(method, params);
       }
     })
   );
@@ -81,7 +92,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     reconnect.onReconnect(() => {
       sync.fetchFullState().catch(() => {});
-      sidebarProvider.pushFullState();
+      for (const p of allProviders) p.pushFullState();
     })
   );
 
@@ -92,8 +103,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const config = vscode.workspace.getConfiguration('tessyn');
   if (config.get<boolean>('autoConnect', true)) {
     reconnect.connectWithHandshake()
-      .then(() => sync.fetchFullState())
-      .catch(() => {
+      .then(() => {
+        console.log('[Tessyn] Connected to daemon');
+        return sync.fetchFullState();
+      })
+      .then(() => {
+        console.log('[Tessyn] State fetched:', store.connected, store.getSessions().length, 'sessions');
+      })
+      .catch((err) => {
+        console.log('[Tessyn] Connection failed:', err instanceof Error ? err.message : err);
         // Will be retried by reconnect manager
       });
   }

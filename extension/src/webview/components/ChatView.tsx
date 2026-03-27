@@ -4,6 +4,7 @@ import type { StreamBlock } from '../../state/session-state.js';
 import { MessageBubble } from './MessageBubble.js';
 import { ToolBlock } from './ToolBlock.js';
 import { ThinkingBlock } from './ThinkingBlock.js';
+import { Markdown } from './Markdown.js';
 
 interface ChatViewProps {
   messages: Message[];
@@ -46,16 +47,11 @@ export function ChatView({ messages, streamBlocks, isStreaming, streamError }: C
             if (block.blockType === 'tool_use') {
               return <ToolBlock key={block.blockIndex} block={block} />;
             }
-            // Text blocks
+            // Text blocks — render as markdown
             if (block.content) {
               return (
-                <div key={block.blockIndex} style={{
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  lineHeight: '1.5',
-                  color: 'var(--vscode-foreground)',
-                }}>
-                  {block.content}
+                <div key={block.blockIndex}>
+                  <Markdown content={block.content} className="markdown-content" />
                   {!block.complete && <span style={{ opacity: 0.5 }}>|</span>}
                 </div>
               );

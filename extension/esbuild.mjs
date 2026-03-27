@@ -1,4 +1,5 @@
 import * as esbuild from 'esbuild';
+import fs from 'node:fs';
 
 const watch = process.argv.includes('--watch');
 const production = process.argv.includes('--production');
@@ -33,7 +34,14 @@ const webviewConfig = {
   },
 };
 
+// Copy static assets to dist
+function copyAssets() {
+  fs.mkdirSync('dist', { recursive: true });
+  fs.copyFileSync('src/webview/styles/markdown.css', 'dist/markdown.css');
+}
+
 async function main() {
+  copyAssets();
   if (watch) {
     const [extCtx, webCtx] = await Promise.all([
       esbuild.context(extensionConfig),

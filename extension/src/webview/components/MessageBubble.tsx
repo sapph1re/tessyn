@@ -1,4 +1,5 @@
 import type { Message } from '../../protocol/types.js';
+import { Markdown } from './Markdown.js';
 
 interface MessageBubbleProps {
   message: Message;
@@ -105,14 +106,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       }}>
         {isUser ? 'You' : 'Assistant'}
       </div>
-      <div style={{
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-word',
-        lineHeight: '1.5',
-        color: 'var(--vscode-foreground)',
-      }}>
-        {message.content}
-      </div>
+      <Markdown content={message.content} className="markdown-content" />
     </div>
   );
 }

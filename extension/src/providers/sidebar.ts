@@ -4,6 +4,7 @@ import type { TessynClient } from '../protocol/client.js';
 
 export class TessynSidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'tessyn.sidebar';
+  public static readonly panelViewType = 'tessyn.panel';
   private view?: vscode.WebviewView;
   private viewDisposables: vscode.Disposable[] = [];
 
@@ -66,11 +67,13 @@ export class TessynSidebarProvider implements vscode.WebviewViewProvider {
    * Push full state snapshot to webview (on mount / visibility change).
    */
   pushFullState(): void {
-    this.postMessage({ type: 'state.full', data: {
+    const data = {
       connected: this.store.connected,
       daemonStatus: this.store.daemonStatus,
       sessions: this.store.getSessions(),
-    }});
+    };
+    console.log('[Tessyn Sidebar] pushFullState:', data.connected, data.sessions.length, 'sessions');
+    this.postMessage({ type: 'state.full', data });
   }
 
   /**
@@ -141,6 +144,9 @@ export class TessynSidebarProvider implements vscode.WebviewViewProvider {
     const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.js')
     );
+    const cssUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'dist', 'markdown.css')
+    );
     const nonce = getNonce();
 
     return `<!DOCTYPE html>
@@ -148,7 +154,8 @@ export class TessynSidebarProvider implements vscode.WebviewViewProvider {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource};">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource} https: data:;">
+  <link rel="stylesheet" href="${cssUri}">
   <style>
     body {
       margin: 0;
