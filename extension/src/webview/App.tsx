@@ -28,6 +28,11 @@ export function App() {
   const [view, setView] = useState<View>('sessions');
   const [activeSession, setActiveSession] = useState<SessionSummary | null>(null);
 
+  // Derive current project slug from most common project in session list
+  const currentProjectSlug = state.sessions.length > 0
+    ? state.sessions[0].projectSlug
+    : undefined;
+
   // Hooks for active session
   const { messages, loading: messagesLoading } = useMessages(activeSession?.externalId ?? null);
   const { stream, resetStream } = useStream();
@@ -167,6 +172,7 @@ export function App() {
         <SearchView
           visible={true}
           onSelectResult={handleSearchResult}
+          projectSlug={currentProjectSlug}
         />
       </div>
     );

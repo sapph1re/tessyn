@@ -5,10 +5,11 @@ import type { SearchResult, SessionSummary } from '../../protocol/types.js';
 interface SearchViewProps {
   onSelectResult: (result: SearchResult) => void;
   visible: boolean;
+  projectSlug?: string;
 }
 
-export function SearchView({ onSelectResult, visible }: SearchViewProps) {
-  const { query, results, searching, error, search, clear } = useSearch();
+export function SearchView({ onSelectResult, visible, projectSlug }: SearchViewProps) {
+  const { query, results, searching, error, scope, search, clear, toggleScope } = useSearch(projectSlug);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -61,6 +62,24 @@ export function SearchView({ onSelectResult, visible }: SearchViewProps) {
               &#10005;
             </button>
           )}
+        </div>
+        <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+          <button
+            onClick={toggleScope}
+            style={{
+              padding: '2px 8px',
+              fontSize: '11px',
+              border: '1px solid var(--vscode-input-border)',
+              borderRadius: '3px',
+              cursor: 'pointer',
+              backgroundColor: scope === 'project'
+                ? 'var(--vscode-button-secondaryBackground)'
+                : 'transparent',
+              color: 'var(--vscode-foreground)',
+            }}
+          >
+            {scope === 'project' ? 'This project' : 'All projects'}
+          </button>
         </div>
       </div>
 
