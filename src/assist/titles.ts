@@ -59,6 +59,7 @@ export async function generateTitle(userMessages: string[]): Promise<string> {
 
 /**
  * Generate titles for sessions that don't have one yet.
+ * Stores titles in session_meta (durable, survives reindex).
  * Uses `claude -p` which goes through the user's Claude Code subscription.
  * Returns the number of titles generated.
  */
@@ -69,13 +70,19 @@ export async function generateMissingTitles(db: Database.Database, limit?: numbe
     return 0;
   }
 
-  // Find sessions without titles
+  // Find sessions without titles in EITHER sessions table or session_meta.
+  // session_meta.title is the durable one; sessions.title is indexer-generated.
   const sessions = db.prepare(`
-    SELECT id, first_prompt FROM sessions
-    WHERE title IS NULL AND state = 'active' AND first_prompt IS NOT NULL
-    ORDER BY updated_at DESC
+    SELECT s.id, s.provider, s.external_id, s.first_prompt
+    FROM sessions s
+    LEFT JOIN session_meta m ON s.provider = m.provider AND s.external_id = m.external_id
+    WHERE s.state = 'active'
+      AND s.first_prompt IS NOT NULL
+      AND s.title IS NULL
+      AND (m.title IS NULL)
+    ORDER BY s.updated_at DESC
     LIMIT ?
-  `).all(limit ?? 50) as Array<{ id: number; first_prompt: string }>;
+  `).all(limit ?? 50) as Array<{ id: number; provider: string; external_id: string; first_prompt: string }>;
 
   if (sessions.length === 0) {
     return 0;
@@ -105,14 +112,15 @@ export async function generateMissingTitles(db: Database.Database, limit?: numbe
         const title = await generateTitle(userTexts);
 
         if (title !== 'Untitled session') {
-          queries.updateSessionMeta(db, session.id, { title });
-          log.debug('Generated title', { sessionId: session.id, title });
+          // Store in durable session_meta (survives reindex)
+          queries.upsertSessionMeta(db, session.provider, session.external_id, { title });
+          log.debug('Generated title', { externalId: session.external_id, title });
           return true;
         }
         return false;
       } catch (err) {
         log.warn('Failed to generate title for session', {
-          sessionId: session.id,
+          externalId: session.external_id,
           error: err instanceof Error ? err.message : String(err),
         });
         return false;
