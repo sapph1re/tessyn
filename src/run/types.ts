@@ -115,4 +115,5 @@ export interface RunSendParams {
   model?: string;
   profile?: string;
   allowedTools?: string[];
+  permissionMode?: 'default' | 'auto-approve';
 }

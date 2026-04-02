@@ -94,6 +94,9 @@ export class RunManager {
     if (params.model) {
       args.push('--model', params.model);
     }
+    if (params.permissionMode === 'auto-approve') {
+      args.push('--dangerously-skip-permissions');
+    }
 
     const run: Run = {
       runId,
