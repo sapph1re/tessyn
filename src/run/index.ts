@@ -89,7 +89,7 @@ export class RunManager {
     ];
 
     if (params.externalId) {
-      args.push('--resume', '--session-id', params.externalId);
+      args.push('--resume', params.externalId);
     }
     if (params.model) {
       args.push('--model', params.model);
