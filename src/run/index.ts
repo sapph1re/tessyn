@@ -4,6 +4,7 @@ import type Database from 'better-sqlite3';
 import { createLogger } from '../shared/logger.js';
 import { parseStreamLine } from './stream-parser.js';
 import { buildInstructions } from './instructions.js';
+import { indexSession } from '../indexer/index.js';
 import * as queries from '../db/queries.js';
 import type { Run, RunEvent, RunSendParams } from './types.js';
 
@@ -188,6 +189,24 @@ export class RunManager {
       }
       this.runs.delete(runId);
       log.info('Run completed', { runId, state: run.state, code, signal });
+
+      // Re-index the session's JSONL to pick up new messages written by Claude CLI.
+      // The file watcher may miss changes during the run (debounce, concurrent writes).
+      const eid = run.externalId;
+      if (eid) {
+        try {
+          const session = queries.getSessionByExternalId(this.db, 'claude', eid);
+          if (session) {
+            const event = indexSession(this.db, session.jsonlPath, session.projectSlug);
+            log.info('Post-run reindex', { externalId: eid, event });
+          }
+        } catch (err) {
+          log.warn('Post-run reindex failed', {
+            externalId: eid,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
     });
 
     proc.on('error', (err) => {
