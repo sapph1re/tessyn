@@ -4,7 +4,10 @@ import type Database from 'better-sqlite3';
 import { createLogger } from '../shared/logger.js';
 import { parseStreamLine } from './stream-parser.js';
 import { buildInstructions } from './instructions.js';
+import path from 'node:path';
 import { indexSession } from '../indexer/index.js';
+import { computeProjectSlug } from '../indexer/session-discovery.js';
+import { getClaudeProjectsDir } from '../platform/paths.js';
 import * as queries from '../db/queries.js';
 import type { Run, RunEvent, RunSendParams } from './types.js';
 
@@ -191,15 +194,16 @@ export class RunManager {
       log.info('Run completed', { runId, state: run.state, code, signal });
 
       // Re-index the session's JSONL to pick up new messages written by Claude CLI.
-      // The file watcher may miss changes during the run (debounce, concurrent writes).
+      // We compute the JSONL path directly rather than looking up by externalId,
+      // because for new sessions the DB entry may not exist yet or the externalId
+      // from the stream may not match the filename-based one.
       const eid = run.externalId;
-      if (eid) {
+      if (eid && run.projectPath) {
         try {
-          const session = queries.getSessionByExternalId(this.db, 'claude', eid);
-          if (session) {
-            const event = indexSession(this.db, session.jsonlPath, session.projectSlug);
-            log.info('Post-run reindex', { externalId: eid, event });
-          }
+          const slug = computeProjectSlug(run.projectPath);
+          const jsonlPath = path.join(getClaudeProjectsDir(), slug, `${eid}.jsonl`);
+          const event = indexSession(this.db, jsonlPath, slug);
+          log.info('Post-run reindex', { externalId: eid, jsonlPath, event });
         } catch (err) {
           log.warn('Post-run reindex failed', {
             externalId: eid,
