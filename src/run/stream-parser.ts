@@ -3,6 +3,26 @@ import type { RunEvent, RunUsage } from './types.js';
 
 const log = createLogger('stream-parser');
 
+// Auth error patterns — tested against real Claude CLI output.
+// The most reliable signal is the "error":"authentication_failed" field
+// on assistant messages, but we also check result text for robustness.
+const AUTH_ERROR_PATTERNS = [
+  /not logged in/i,
+  /authentication[_ ](?:failed|required|error)/i,
+  /please\s+run\s+.*login/i,
+  /token.*(?:expired|invalid|revoked)/i,
+  /(?:credentials?\s+(?:not found|invalid|expired|missing)|invalid\s+credentials?)/i,
+  /\b401\b.*unauthorized/i,
+  /oauth.*(?:error|expired|invalid|failed)/i,
+];
+
+/**
+ * Check if an error string indicates an authentication problem.
+ */
+export function isAuthError(errorText: string): boolean {
+  return AUTH_ERROR_PATTERNS.some(pattern => pattern.test(errorText));
+}
+
 /**
  * Parse a single line of Claude stream-json stdout into RunEvents.
  *
@@ -64,6 +84,21 @@ function parseSystemEvent(runId: string, event: Record<string, unknown>): RunEve
 function parseAssistantEvent(runId: string, event: Record<string, unknown>): RunEvent[] {
   const message = event['message'] as Record<string, unknown> | undefined;
   if (!message) return [];
+
+  // Check for auth error — Claude CLI sets "error":"authentication_failed" on the
+  // assistant message when not logged in. This is the most reliable signal.
+  const errorField = event['error'] as string | undefined;
+  if (errorField === 'authentication_failed') {
+    const content = message['content'];
+    const errorText = Array.isArray(content)
+      ? (content[0] as Record<string, unknown>)?.['text'] as string ?? 'Not logged in'
+      : 'Not logged in';
+    return [{
+      type: 'run.auth_required',
+      runId,
+      error: errorText,
+    }];
+  }
 
   const content = message['content'];
   if (Array.isArray(content)) {
@@ -165,10 +200,22 @@ function parseResultEvent(runId: string, event: Record<string, unknown>): RunEve
 
   if (isError) {
     const errorResult = event['result'] as string | undefined;
+    const errorText = errorResult ?? 'Unknown error';
+
+    // Detect auth errors in result text as a fallback
+    // (primary detection is on assistant message "error":"authentication_failed")
+    if (isAuthError(errorText)) {
+      return [{
+        type: 'run.auth_required',
+        runId,
+        error: errorText,
+      }];
+    }
+
     return [{
       type: 'run.failed',
       runId,
-      error: errorResult ?? 'Unknown error',
+      error: errorText,
     }];
   }
 

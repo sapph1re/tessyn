@@ -8,6 +8,8 @@ export interface Run {
   provider: string;
   projectPath: string;
   model: string | null;
+  profile: string | null;
+  configDir: string | null; // resolved config dir for this run
   state: RunState;
   startedAt: number;
   completedAt: number | null;
@@ -35,6 +37,7 @@ export type RunEvent =
   | RunMessageEvent
   | RunCompletedEvent
   | RunFailedEvent
+  | RunAuthRequiredEvent
   | RunCancelledEvent
   | RunRateLimitEvent;
 
@@ -93,6 +96,13 @@ export interface RunFailedEvent {
   type: 'run.failed';
   runId: string;
   error: string;
+}
+
+export interface RunAuthRequiredEvent {
+  type: 'run.auth_required';
+  runId: string;
+  error: string;
+  profile?: string;
 }
 
 export interface RunCancelledEvent {

@@ -7,6 +7,15 @@ import { generateMissingTitles } from '../assist/titles.js';
 import type { RunManager } from '../run/index.js';
 import type { RunSendParams } from '../run/types.js';
 import {
+  checkProfileAuth,
+  getProfiles,
+  loadProfiles,
+  addProfile,
+  removeProfile,
+  setDefaultProfile,
+  checkAuthStatus,
+} from '../platform/profiles.js';
+import {
   createResponse,
   createErrorResponse,
   parseRequest,
@@ -222,6 +231,9 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
           if (msg.includes('Max concurrent')) {
             return createErrorResponse(request.id, RPC_ERRORS.RUN_LIMIT_REACHED, msg);
           }
+          if (msg.includes('Profile not found')) {
+            return createErrorResponse(request.id, RPC_ERRORS.PROFILE_NOT_FOUND, msg);
+          }
           throw err;
         }
       }
@@ -258,6 +270,72 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
         }
         const run = ctx.runManager.getRun(id);
         return createResponse(request.id, { run });
+      }
+
+      case 'auth.status': {
+        const profileName = request.params?.['profile'] as string | undefined;
+        const result = await checkProfileAuth(profileName);
+        if (!result) {
+          return createErrorResponse(request.id, RPC_ERRORS.PROFILE_NOT_FOUND, `Profile not found: ${profileName}`);
+        }
+        return createResponse(request.id, result);
+      }
+
+      case 'profiles.list': {
+        const checkAuth = request.params?.['checkAuth'] as boolean | undefined;
+        const profiles = getProfiles();
+        const data = loadProfiles();
+
+        if (checkAuth) {
+          const withAuth = await Promise.all(
+            profiles.map(async (p) => ({
+              ...p,
+              auth: await checkAuthStatus(p.configDir),
+            })),
+          );
+          return createResponse(request.id, { profiles: withAuth, defaultProfile: data.defaultProfile });
+        }
+        return createResponse(request.id, { profiles, defaultProfile: data.defaultProfile });
+      }
+
+      case 'profiles.add': {
+        const name = request.params?.['name'] as string | undefined;
+        const configDir = request.params?.['configDir'] as string | undefined;
+        if (!name || !configDir) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: name, configDir');
+        }
+        try {
+          addProfile(name, configDir);
+          return createResponse(request.id, { ok: true });
+        } catch (err) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, err instanceof Error ? err.message : String(err));
+        }
+      }
+
+      case 'profiles.remove': {
+        const name = request.params?.['name'] as string | undefined;
+        if (!name) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: name');
+        }
+        try {
+          removeProfile(name);
+          return createResponse(request.id, { ok: true });
+        } catch (err) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, err instanceof Error ? err.message : String(err));
+        }
+      }
+
+      case 'profiles.setDefault': {
+        const name = request.params?.['name'] as string | undefined;
+        if (!name) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: name');
+        }
+        try {
+          setDefaultProfile(name);
+          return createResponse(request.id, { ok: true });
+        } catch (err) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, err instanceof Error ? err.message : String(err));
+        }
       }
 
       case 'shutdown': {
