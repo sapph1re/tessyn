@@ -181,6 +181,93 @@ The daemon maintains a `session_meta` table that **survives reindex**. When `tes
 
 The display title shown to users should be: `meta.title ?? session.title ?? session.firstPrompt`.
 
+## Authentication & Profiles
+
+The daemon supports multiple Claude accounts (profiles). Each profile points to a different Claude config directory with its own credentials.
+
+### Why this matters
+
+Claude Code stores auth in different ways depending on how the user logged in. Interactive CLI sessions often use the macOS keychain, but daemon-spawned subprocesses can't access the keychain. Profiles with file-based OAuth tokens (in `.credentials.json`) work reliably from the daemon.
+
+### How it works
+
+On startup, call `profiles.list` with `checkAuth: true` to discover available accounts:
+
+```json
+{"jsonrpc": "2.0", "id": 1, "method": "profiles.list", "params": {"checkAuth": true}}
+```
+
+Response:
+```json
+{
+  "profiles": [
+    { "name": "default", "configDir": "/Users/alice/.claude", "isDefault": true,
+      "auth": { "loggedIn": false, "authMethod": "none" } },
+    { "name": "home", "configDir": "/Users/alice/.claude-home", "isDefault": false,
+      "auth": { "loggedIn": true, "email": "alice@example.com", "subscriptionType": "max" } }
+  ],
+  "defaultProfile": "default"
+}
+```
+
+Most users will have a single "default" profile. The profile config file (`profiles.json`) is only created when a user explicitly adds a second profile — until then, the daemon synthesizes a single implicit default.
+
+### Sending messages with a profile
+
+Pass the `profile` name in `run.send`:
+
+```json
+{"jsonrpc": "2.0", "id": 2, "method": "run.send", "params": {
+  "prompt": "Hello",
+  "projectPath": "/path/to/project",
+  "profile": "home",
+  "permissionMode": "auto-approve"
+}}
+```
+
+If `profile` is omitted, the default profile is used.
+
+### Handling auth errors
+
+When Claude can't authenticate, the daemon emits `run.auth_required` instead of generic `run.failed`:
+
+```json
+{"jsonrpc": "2.0", "method": "run.auth_required", "params": {
+  "runId": "uuid",
+  "error": "Not logged in · Please run /login"
+}}
+```
+
+The GUI should catch this event and show a meaningful message (e.g., "Not logged in — please authenticate in the terminal with `claude login`") instead of a generic error.
+
+### Checking auth on demand
+
+```json
+{"jsonrpc": "2.0", "id": 3, "method": "auth.status", "params": {"profile": "default"}}
+```
+
+### Managing profiles
+
+```json
+// Add
+{"jsonrpc": "2.0", "id": 4, "method": "profiles.add", "params": {"name": "work", "configDir": "~/.claude-work"}}
+
+// Remove
+{"jsonrpc": "2.0", "id": 5, "method": "profiles.remove", "params": {"name": "work"}}
+
+// Set default
+{"jsonrpc": "2.0", "id": 6, "method": "profiles.setDefault", "params": {"name": "home"}}
+```
+
+### Recommended GUI flow
+
+1. On startup: call `profiles.list` with `checkAuth: true`
+2. If only one profile and it's authenticated: use it silently
+3. If only one profile and it's NOT authenticated: show "Not logged in" with instructions
+4. If multiple profiles: show a profile selector (dropdown or settings page)
+5. On `run.auth_required` event: show the error and suggest re-authenticating
+6. Store the user's selected profile in local app settings and pass it with every `run.send`
+
 ## Error Handling
 
 All errors are JSON-RPC 2.0 format:
@@ -200,6 +287,9 @@ All errors are JSON-RPC 2.0 format:
 | -32001 | Session not found |
 | -32002 | Run not found |
 | -32003 | Max concurrent runs reached |
+| -32004 | Claude CLI not installed |
+| -32005 | Authentication required (not logged in) |
+| -32006 | Profile not found |
 
 ## Migration Checklist
 

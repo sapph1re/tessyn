@@ -2,12 +2,13 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import crypto from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { createLogger } from '../shared/logger.js';
-import { parseStreamLine } from './stream-parser.js';
+import { parseStreamLine, isAuthError } from './stream-parser.js';
 import { buildInstructions } from './instructions.js';
 import path from 'node:path';
 import { indexSession } from '../indexer/index.js';
 import { computeProjectSlug } from '../indexer/session-discovery.js';
 import { getClaudeProjectsDir } from '../platform/paths.js';
+import { resolveConfigDir } from '../platform/profiles.js';
 import * as queries from '../db/queries.js';
 import type { Run, RunEvent, RunSendParams } from './types.js';
 
@@ -102,12 +103,23 @@ export class RunManager {
       args.push('--dangerously-skip-permissions');
     }
 
+    // Resolve profile to config directory
+    let resolvedConfigDir: string | null = null;
+    if (params.profile) {
+      resolvedConfigDir = resolveConfigDir(params.profile);
+      if (!resolvedConfigDir) {
+        throw new Error(`Profile not found: ${params.profile}`);
+      }
+    }
+
     const run: Run = {
       runId,
       externalId: params.externalId ?? null,
       provider: 'claude',
       projectPath: params.projectPath,
       model: params.model ?? null,
+      profile: params.profile ?? null,
+      configDir: resolvedConfigDir,
       state: 'spawning',
       startedAt: now,
       completedAt: null,
@@ -122,6 +134,10 @@ export class RunManager {
     const env = { ...process.env };
     // Prevent Claude from refusing to run inside another Claude
     delete env['CLAUDECODE'];
+    // Set profile-specific config directory
+    if (resolvedConfigDir) {
+      env['CLAUDE_CONFIG_DIR'] = resolvedConfigDir;
+    }
 
     // On Windows, spawn with shell:true so .cmd shims work
     // (shell:true is safe here because args are passed as an array, not a string)
@@ -165,14 +181,22 @@ export class RunManager {
             run.completedAt = Date.now();
             run.error = event.error;
           }
+          if (event.type === 'run.auth_required') {
+            run.state = 'failed';
+            run.completedAt = Date.now();
+            run.error = event.error;
+          }
           this.emit(event);
         }
       }
     });
 
-    // Log stderr
+    // Buffer stderr for auth error detection on exit
+    let stderrBuffer = '';
     proc.stderr?.on('data', (data: Buffer) => {
-      log.debug('Claude stderr', { runId, data: data.toString().substring(0, 200) });
+      const text = data.toString();
+      stderrBuffer += text;
+      log.debug('Claude stderr', { runId, data: text.substring(0, 200) });
     });
 
     // Handle process exit
@@ -186,8 +210,14 @@ export class RunManager {
         } else if (code !== 0) {
           run.state = 'failed';
           run.completedAt = Date.now();
-          run.error = `Process exited with code ${code}`;
-          this.emit({ type: 'run.failed', runId, error: run.error });
+          // Check stderr for auth errors (Claude may write to stderr and exit without a JSON result)
+          if (isAuthError(stderrBuffer)) {
+            run.error = stderrBuffer.trim() || `Authentication failed (exit code ${code})`;
+            this.emit({ type: 'run.auth_required', runId, error: run.error });
+          } else {
+            run.error = `Process exited with code ${code}`;
+            this.emit({ type: 'run.failed', runId, error: run.error });
+          }
         }
       }
       this.runs.delete(runId);
@@ -201,7 +231,11 @@ export class RunManager {
       if (eid && run.projectPath) {
         try {
           const slug = computeProjectSlug(run.projectPath);
-          const jsonlPath = path.join(getClaudeProjectsDir(), slug, `${eid}.jsonl`);
+          // Use profile-specific projects dir if a profile was used
+          const projectsDir = run.configDir
+            ? path.join(run.configDir, 'projects')
+            : getClaudeProjectsDir();
+          const jsonlPath = path.join(projectsDir, slug, `${eid}.jsonl`);
           const event = indexSession(this.db, jsonlPath, slug);
           log.info('Post-run reindex', { externalId: eid, jsonlPath, event });
         } catch (err) {

@@ -38,7 +38,7 @@ export function getStatus(): DaemonStatus {
     uptime: Date.now() - startTime,
     version: VERSION,
     protocolVersion: PROTOCOL_VERSION,
-    capabilities: ['search', 'meta', 'run', 'stream', 'titles'],
+    capabilities: ['search', 'meta', 'run', 'stream', 'titles', 'profiles', 'auth'],
   };
 }
 
