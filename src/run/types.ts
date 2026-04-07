@@ -126,4 +126,5 @@ export interface RunSendParams {
   profile?: string;
   allowedTools?: string[];
   permissionMode?: 'default' | 'auto-approve';
+  reasoningEffort?: 'low' | 'medium' | 'high' | 'max';
 }
