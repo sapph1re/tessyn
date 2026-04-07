@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createRequire } from 'node:module';
 import { Command } from 'commander';
 import { startCommand } from './commands/start.js';
 import { stopCommand } from './commands/stop.js';
@@ -11,12 +12,15 @@ import { titlesCommand } from './commands/titles.js';
 import { watchCommand } from './commands/watch.js';
 import { installSkillsCommand } from './commands/skills.js';
 
+const require = createRequire(import.meta.url);
+const { version } = require('../../package.json') as { version: string };
+
 const program = new Command();
 
 program
   .name('tessyn')
   .description('The developer workflow operating system')
-  .version('0.2.0');
+  .version(version);
 
 program
   .command('start')

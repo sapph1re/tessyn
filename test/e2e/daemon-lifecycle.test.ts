@@ -103,7 +103,7 @@ describe('E2E: Daemon Lifecycle', () => {
     const statusResponse = await sendRequest('status', undefined, socketPath);
     expect(statusResponse.error).toBeUndefined();
     const status = statusResponse.result as Record<string, unknown>;
-    expect(status['version']).toBe('0.2.0');
+    expect(typeof status['version']).toBe('string');
 
     // Test sessions.list (should be empty)
     const listResponse = await sendRequest('sessions.list', {}, socketPath);

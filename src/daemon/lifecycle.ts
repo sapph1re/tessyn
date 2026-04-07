@@ -1,5 +1,6 @@
 import net from 'node:net';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import { createLogger } from '../shared/logger.js';
 import { getSocketPath } from '../platform/paths.js';
 import type { DaemonState, DaemonStatus } from '../shared/types.js';
@@ -7,7 +8,8 @@ import { DaemonAlreadyRunningError } from '../shared/errors.js';
 
 const log = createLogger('lifecycle');
 
-const VERSION = '0.2.0';
+const require = createRequire(import.meta.url);
+const { version: VERSION } = require('../../package.json') as { version: string };
 const PROTOCOL_VERSION = 2;
 const startTime = Date.now();
 
