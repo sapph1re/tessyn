@@ -102,6 +102,9 @@ export class RunManager {
     if (params.permissionMode === 'auto-approve') {
       args.push('--dangerously-skip-permissions');
     }
+    if (params.reasoningEffort) {
+      args.push('--effort', params.reasoningEffort);
+    }
 
     // Resolve profile to config directory
     let resolvedConfigDir: string | null = null;

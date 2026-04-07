@@ -15,6 +15,7 @@ import {
   setDefaultProfile,
   checkAuthStatus,
 } from '../platform/profiles.js';
+import { listCommands } from '../commands/index.js';
 import {
   createResponse,
   createErrorResponse,
@@ -223,6 +224,9 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
         if (!params?.prompt || !params?.projectPath) {
           return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: prompt, projectPath');
         }
+        if (params.reasoningEffort && !['low', 'medium', 'high', 'max'].includes(params.reasoningEffort)) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, `Invalid reasoningEffort: ${params.reasoningEffort}. Must be low, medium, high, or max.`);
+        }
         try {
           const runId = await ctx.runManager.send(params);
           return createResponse(request.id, { runId });
@@ -335,6 +339,62 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
           return createResponse(request.id, { ok: true });
         } catch (err) {
           return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, err instanceof Error ? err.message : String(err));
+        }
+      }
+
+      case 'commands.list': {
+        const projectPath = request.params?.['projectPath'] as string | undefined;
+        const commands = listCommands(projectPath);
+        return createResponse(request.id, { commands });
+      }
+
+      case 'commands.execute': {
+        // Send a slash command via run.send. Claude CLI interprets /command natively.
+        if (!ctx.runManager) {
+          return createErrorResponse(request.id, RPC_ERRORS.INTERNAL_ERROR, 'RunManager not initialized');
+        }
+        const command = request.params?.['command'] as string | undefined;
+        const cmdArgs = request.params?.['args'] as string | undefined ?? '';
+        const externalId = request.params?.['externalId'] as string | undefined;
+        const projectPath = request.params?.['projectPath'] as string | undefined;
+        const profile = request.params?.['profile'] as string | undefined;
+        const permissionMode = request.params?.['permissionMode'] as 'default' | 'auto-approve' | undefined;
+
+        if (!command || !projectPath) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: command, projectPath');
+        }
+
+        // Sanitize: command must be alphanumeric/dash only (no spaces, newlines, slashes)
+        if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(command)) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, `Invalid command name: ${command}`);
+        }
+
+        // Validate against known commands (builtins + discovered skills)
+        const known = listCommands(projectPath);
+        if (!known.some(c => c.name === command)) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, `Unknown command: /${command}`);
+        }
+
+        const prompt = cmdArgs ? `/${command} ${cmdArgs}` : `/${command}`;
+
+        try {
+          const runId = await ctx.runManager.send({
+            prompt,
+            projectPath,
+            externalId,
+            profile,
+            permissionMode: permissionMode ?? 'default',
+          });
+          return createResponse(request.id, { runId, streaming: true });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes('Max concurrent')) {
+            return createErrorResponse(request.id, RPC_ERRORS.RUN_LIMIT_REACHED, msg);
+          }
+          if (msg.includes('Profile not found')) {
+            return createErrorResponse(request.id, RPC_ERRORS.PROFILE_NOT_FOUND, msg);
+          }
+          throw err;
         }
       }
 
