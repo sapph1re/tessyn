@@ -224,6 +224,9 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
         if (!params?.prompt || !params?.projectPath) {
           return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: prompt, projectPath');
         }
+        if (params.reasoningEffort && !['low', 'medium', 'high', 'max'].includes(params.reasoningEffort)) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, `Invalid reasoningEffort: ${params.reasoningEffort}. Must be low, medium, high, or max.`);
+        }
         try {
           const runId = await ctx.runManager.send(params);
           return createResponse(request.id, { runId });
@@ -346,8 +349,7 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
       }
 
       case 'commands.execute': {
-        // For built-in commands and skills, send as a slash-command prompt
-        // via run.send. Claude CLI interprets /command natively within a session.
+        // Send a slash command via run.send. Claude CLI interprets /command natively.
         if (!ctx.runManager) {
           return createErrorResponse(request.id, RPC_ERRORS.INTERNAL_ERROR, 'RunManager not initialized');
         }
@@ -356,13 +358,23 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
         const externalId = request.params?.['externalId'] as string | undefined;
         const projectPath = request.params?.['projectPath'] as string | undefined;
         const profile = request.params?.['profile'] as string | undefined;
-        const permissionMode = request.params?.['permissionMode'] as string | undefined;
+        const permissionMode = request.params?.['permissionMode'] as 'default' | 'auto-approve' | undefined;
 
         if (!command || !projectPath) {
           return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: command, projectPath');
         }
 
-        // Build the slash command as the prompt
+        // Sanitize: command must be alphanumeric/dash only (no spaces, newlines, slashes)
+        if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(command)) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, `Invalid command name: ${command}`);
+        }
+
+        // Validate against known commands (builtins + discovered skills)
+        const known = listCommands(projectPath);
+        if (!known.some(c => c.name === command)) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, `Unknown command: /${command}`);
+        }
+
         const prompt = cmdArgs ? `/${command} ${cmdArgs}` : `/${command}`;
 
         try {
@@ -371,7 +383,7 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
             projectPath,
             externalId,
             profile,
-            permissionMode: (permissionMode as 'default' | 'auto-approve') ?? 'auto-approve',
+            permissionMode: permissionMode ?? 'default',
           });
           return createResponse(request.id, { runId, streaming: true });
         } catch (err) {

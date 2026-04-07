@@ -29,50 +29,20 @@ export interface CommandInfo {
 // a resumed session, and Claude CLI interprets them natively.
 
 const BUILTIN_COMMANDS: CommandInfo[] = [
-  {
-    name: 'compact',
-    description: 'Compact the conversation to reduce context usage',
-    type: 'builtin',
-    args: [],
-  },
-  {
-    name: 'clear',
-    description: 'Clear conversation context and start fresh',
-    type: 'builtin',
-    args: [],
-  },
-  {
-    name: 'model',
-    description: 'Switch the AI model for this session',
-    type: 'builtin',
-    args: [
-      { name: 'model', description: 'Model name', required: false, choices: ['opus', 'sonnet', 'haiku'] },
-    ],
-  },
-  {
-    name: 'help',
-    description: 'Show available commands and help',
-    type: 'builtin',
-    args: [],
-  },
-  {
-    name: 'login',
-    description: 'Authenticate with Claude',
-    type: 'builtin',
-    args: [],
-  },
-  {
-    name: 'cost',
-    description: 'Show token usage and cost for this session',
-    type: 'builtin',
-    args: [],
-  },
-  {
-    name: 'context',
-    description: 'Show current context window usage',
-    type: 'builtin',
-    args: [],
-  },
+  { name: 'compact', description: 'Compact the conversation to reduce context usage', type: 'builtin', args: [] },
+  { name: 'clear', description: 'Clear conversation context and start fresh', type: 'builtin', args: [] },
+  { name: 'model', description: 'Switch the AI model for this session', type: 'builtin',
+    args: [{ name: 'model', description: 'Model name', required: false, choices: ['opus', 'sonnet', 'haiku'] }] },
+  { name: 'help', description: 'Show available commands and help', type: 'builtin', args: [] },
+  { name: 'login', description: 'Authenticate with Claude', type: 'builtin', args: [] },
+  { name: 'cost', description: 'Show token usage and cost for this session', type: 'builtin', args: [] },
+  { name: 'context', description: 'Show current context window usage', type: 'builtin', args: [] },
+  { name: 'status', description: 'Show session status and active tools', type: 'builtin', args: [] },
+  { name: 'usage', description: 'Show API usage and rate limit info', type: 'builtin', args: [] },
+  { name: 'mcp', description: 'Manage MCP servers', type: 'builtin', args: [] },
+  { name: 'init', description: 'Initialize CLAUDE.md in the current project', type: 'builtin', args: [] },
+  { name: 'review', description: 'Review code changes', type: 'builtin', args: [] },
+  { name: 'debug', description: 'Toggle debug mode', type: 'builtin', args: [] },
 ];
 
 // === Skill Discovery ===
@@ -81,7 +51,9 @@ const BUILTIN_COMMANDS: CommandInfo[] = [
  * Parse a SKILL.md file's YAML frontmatter to extract metadata.
  */
 function parseSkillFrontmatter(content: string): { name?: string; description?: string } {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
+  // Handle both LF and CRLF line endings
+  const normalized = content.replace(/\r\n/g, '\n');
+  const match = normalized.match(/^---\n([\s\S]*?)\n---/);
   if (!match) return {};
 
   const frontmatter = match[1]!;
@@ -90,7 +62,12 @@ function parseSkillFrontmatter(content: string): { name?: string; description?: 
     const colonIdx = line.indexOf(':');
     if (colonIdx > 0) {
       const key = line.substring(0, colonIdx).trim();
-      const value = line.substring(colonIdx + 1).trim();
+      let value = line.substring(colonIdx + 1).trim();
+      // Strip surrounding quotes if present
+      if ((value.startsWith('"') && value.endsWith('"')) ||
+          (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
       result[key] = value;
     }
   }
