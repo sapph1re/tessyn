@@ -1,3 +1,25 @@
+// === Content Blocks (matches Anthropic Messages API format) ===
+
+export type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } };
+
+// === Session Process (persistent per-session Claude process) ===
+
+export interface SessionProcess {
+  externalId: string;
+  projectPath: string;
+  model: string | null;
+  profile: string | null;
+  configDir: string | null;
+  permissionMode: 'default' | 'auto-approve';
+  state: 'idle' | 'streaming';
+  activeRunId: string | null;
+  spawnedAt: number;
+  lastActivityAt: number;
+  instructionsSent: boolean;
+}
+
 // === Run State Machine ===
 
 export type RunState = 'spawning' | 'streaming' | 'completed' | 'failed' | 'cancelled';
@@ -119,9 +141,10 @@ export interface RunRateLimitEvent {
 // === Send Parameters ===
 
 export interface RunSendParams {
-  prompt: string;
+  prompt?: string;               // Backward compat — converted to text content block
+  content?: ContentBlock[];      // Native content blocks (images, text)
   projectPath: string;
-  externalId?: string;  // If resuming an existing session
+  externalId?: string;           // If resuming or sending to existing session
   model?: string;
   profile?: string;
   allowedTools?: string[];

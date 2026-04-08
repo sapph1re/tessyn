@@ -221,8 +221,11 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
           return createErrorResponse(request.id, RPC_ERRORS.CLAUDE_NOT_AVAILABLE, 'Claude CLI not found. Install it first.');
         }
         const params = request.params as unknown as RunSendParams | undefined;
-        if (!params?.prompt || !params?.projectPath) {
-          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: prompt, projectPath');
+        if (!params?.projectPath) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: projectPath');
+        }
+        if (!params.prompt && (!params.content || params.content.length === 0)) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: prompt or content');
         }
         if (params.reasoningEffort && !['low', 'medium', 'high', 'max'].includes(params.reasoningEffort)) {
           return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, `Invalid reasoningEffort: ${params.reasoningEffort}. Must be low, medium, high, or max.`);
@@ -238,8 +241,60 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
           if (msg.includes('Profile not found')) {
             return createErrorResponse(request.id, RPC_ERRORS.PROFILE_NOT_FOUND, msg);
           }
+          if (msg.includes('Session busy')) {
+            return createErrorResponse(request.id, RPC_ERRORS.SESSION_BUSY, msg);
+          }
           throw err;
         }
+      }
+
+      case 'sessions.create': {
+        if (!ctx.runManager) {
+          return createErrorResponse(request.id, RPC_ERRORS.INTERNAL_ERROR, 'RunManager not initialized');
+        }
+        const projectPath = request.params?.['projectPath'] as string | undefined;
+        if (!projectPath) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: projectPath');
+        }
+        try {
+          const externalId = await ctx.runManager.createSession({
+            projectPath,
+            externalId: request.params?.['externalId'] as string | undefined,
+            model: request.params?.['model'] as string | undefined,
+            profile: request.params?.['profile'] as string | undefined,
+            permissionMode: request.params?.['permissionMode'] as 'default' | 'auto-approve' | undefined,
+            reasoningEffort: request.params?.['reasoningEffort'] as 'low' | 'medium' | 'high' | 'max' | undefined,
+          });
+          return createResponse(request.id, { externalId });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes('Max concurrent')) {
+            return createErrorResponse(request.id, RPC_ERRORS.RUN_LIMIT_REACHED, msg);
+          }
+          throw err;
+        }
+      }
+
+      case 'sessions.close': {
+        if (!ctx.runManager) {
+          return createErrorResponse(request.id, RPC_ERRORS.INTERNAL_ERROR, 'RunManager not initialized');
+        }
+        const closeId = request.params?.['externalId'] as string | undefined;
+        if (!closeId) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: externalId');
+        }
+        const closed = ctx.runManager.closeSession(closeId);
+        if (!closed) {
+          return createErrorResponse(request.id, RPC_ERRORS.SESSION_NOT_FOUND, `No running session: ${closeId}`);
+        }
+        return createResponse(request.id, { ok: true });
+      }
+
+      case 'sessions.runningList': {
+        if (!ctx.runManager) {
+          return createResponse(request.id, { sessions: [] });
+        }
+        return createResponse(request.id, { sessions: ctx.runManager.getActiveSessions() });
       }
 
       case 'run.cancel': {
