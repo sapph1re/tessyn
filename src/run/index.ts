@@ -148,14 +148,7 @@ export class RunManager {
   /**
    * Create a session (spawn process) without sending a message.
    */
-  async createSession(params: {
-    projectPath: string;
-    externalId?: string;
-    model?: string;
-    profile?: string;
-    permissionMode?: 'default' | 'auto-approve';
-    reasoningEffort?: 'low' | 'medium' | 'high' | 'max';
-  }): Promise<string> {
+  async createSession(params: Omit<RunSendParams, 'prompt' | 'content'> & { projectPath: string }): Promise<string> {
     // Check for duplicate — don't spawn a second process for same externalId
     if (params.externalId && this.sessions.has(params.externalId)) {
       return params.externalId; // Already running
@@ -174,75 +167,34 @@ export class RunManager {
     const env = this.buildEnv(resolvedConfigDir);
     const proc = this.spawnProcess(args, params.projectPath, env);
 
-    // Wait for the system event to get externalId
-    return new Promise<string>((resolve, reject) => {
-      let resolved = false;
-      const cleanup = () => {
-        resolved = true;
-        proc.stdout?.removeListener('data', onData);
-        proc.removeListener('error', onError);
-        proc.removeListener('exit', onExit);
-      };
-      const timeout = setTimeout(() => {
-        if (!resolved) {
-          cleanup();
-          proc.kill('SIGTERM');
-          reject(new Error('Timeout waiting for session init'));
-        }
-      }, 15000);
+    // Register session immediately with the provided externalId or a generated one.
+    // The Claude CLI only emits the system event after the first message, not on spawn.
+    // The stdout handler will update model/tools when the system event eventually arrives.
+    const externalId = params.externalId ?? crypto.randomUUID();
 
-      let stdoutBuffer = '';
-      const onData = (data: Buffer) => {
-        if (resolved) return; // Guard against post-timeout events
-        stdoutBuffer += data.toString();
-        let idx: number;
-        while ((idx = stdoutBuffer.indexOf('\n')) !== -1) {
-          const line = stdoutBuffer.substring(0, idx);
-          stdoutBuffer = stdoutBuffer.substring(idx + 1);
-          const events = parseStreamLine('init', line);
-          for (const event of events) {
-            if (event.type === 'run.system') {
-              clearTimeout(timeout);
-              cleanup();
-              const externalId = event.externalId;
+    const session: SessionProcess = {
+      externalId,
+      projectPath: params.projectPath,
+      model: params.model ?? null,
+      profile: params.profile ?? null,
+      configDir: resolvedConfigDir,
+      permissionMode: params.permissionMode ?? 'default',
+      state: 'idle',
+      activeRunId: null,
+      spawnedAt: now,
+      lastActivityAt: now,
+      instructionsSent: false,
+    };
 
-              const session: SessionProcess = {
-                externalId,
-                projectPath: params.projectPath,
-                model: event.model,
-                profile: params.profile ?? null,
-                configDir: resolvedConfigDir,
-                permissionMode: params.permissionMode ?? 'default',
-                state: 'idle',
-                activeRunId: null,
-                spawnedAt: now,
-                lastActivityAt: now,
-                instructionsSent: false,
-              };
+    const activeSession: ActiveSession = { session, process: proc, stderrBuffer: '', cancelledRunId: null, lastRun: null };
+    this.sessions.set(externalId, activeSession);
+    this.setupStdoutHandler(activeSession, 'create');
+    this.setupStderrHandler(activeSession);
+    this.setupExitHandler(activeSession);
+    this.startIdleTimer(externalId);
 
-              const activeSession: ActiveSession = { session, process: proc, stderrBuffer: '', cancelledRunId: null, lastRun: null };
-              this.sessions.set(externalId, activeSession);
-              this.setupStdoutHandler(activeSession, 'init');
-              this.setupStderrHandler(activeSession);
-              this.setupExitHandler(activeSession);
-              this.startIdleTimer(externalId);
-              resolve(externalId);
-              return;
-            }
-          }
-        }
-      };
-      proc.stdout?.on('data', onData);
-
-      const onError = (err: Error) => {
-        if (!resolved) { clearTimeout(timeout); cleanup(); reject(err); }
-      };
-      const onExit = (code: number | null) => {
-        if (!resolved) { clearTimeout(timeout); cleanup(); reject(new Error(`Process exited with code ${code} before init`)); }
-      };
-      proc.on('error', onError);
-      proc.on('exit', onExit);
-    });
+    log.info('Session created', { externalId, projectPath: params.projectPath });
+    return externalId;
   }
 
   getRun(runId: string): Run | null {
@@ -385,30 +337,85 @@ export class RunManager {
     return runId;
   }
 
-  private buildSpawnArgs(params: {
-    externalId?: string;
-    model?: string;
-    permissionMode?: 'default' | 'auto-approve';
-    reasoningEffort?: 'low' | 'medium' | 'high' | 'max';
-  }): string[] {
+  private buildSpawnArgs(params: Partial<RunSendParams>): string[] {
     const args = [
       '--input-format', 'stream-json',
       '--output-format', 'stream-json',
       '--verbose',
       '--include-partial-messages',
     ];
-    if (params.externalId) {
+
+    // Session identity
+    if (params.continueLastConversation) {
+      args.push('--continue');
+    } else if (params.externalId) {
       args.push('--resume', params.externalId);
     }
+    if (params.forkSession) {
+      args.push('--fork-session');
+    }
+    if (params.sessionName) {
+      args.push('--name', params.sessionName);
+    }
+
+    // Model and reasoning
     if (params.model) {
       args.push('--model', params.model);
-    }
-    if (params.permissionMode === 'auto-approve') {
-      args.push('--dangerously-skip-permissions');
     }
     if (params.reasoningEffort) {
       args.push('--effort', params.reasoningEffort);
     }
+
+    // Permissions
+    if (params.permissionMode === 'auto-approve') {
+      args.push('--dangerously-skip-permissions');
+    }
+
+    // Tool restrictions
+    if (params.allowedTools && params.allowedTools.length > 0) {
+      args.push('--allowedTools', ...params.allowedTools);
+    }
+    if (params.disallowedTools && params.disallowedTools.length > 0) {
+      args.push('--disallowedTools', ...params.disallowedTools);
+    }
+
+    // Additional directories
+    if (params.addDirs && params.addDirs.length > 0) {
+      args.push('--add-dir', ...params.addDirs);
+    }
+
+    // MCP servers
+    if (params.mcpConfig && params.mcpConfig.length > 0) {
+      args.push('--mcp-config', ...params.mcpConfig);
+    }
+
+    // Custom agents
+    if (params.agents && Object.keys(params.agents).length > 0) {
+      args.push('--agents', JSON.stringify(params.agents));
+    }
+
+    // Plugin directories
+    if (params.pluginDirs && params.pluginDirs.length > 0) {
+      for (const dir of params.pluginDirs) {
+        args.push('--plugin-dir', dir);
+      }
+    }
+
+    // System prompt
+    if (params.systemPromptAppend) {
+      args.push('--append-system-prompt', params.systemPromptAppend);
+    }
+
+    // Budget limit
+    if (params.maxBudgetUsd !== undefined && params.maxBudgetUsd > 0) {
+      args.push('--max-budget-usd', String(params.maxBudgetUsd));
+    }
+
+    // Structured output
+    if (params.jsonSchema) {
+      args.push('--json-schema', params.jsonSchema);
+    }
+
     return args;
   }
 

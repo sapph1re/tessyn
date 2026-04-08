@@ -147,7 +147,19 @@ export interface RunSendParams {
   externalId?: string;           // If resuming or sending to existing session
   model?: string;
   profile?: string;
-  allowedTools?: string[];
   permissionMode?: 'default' | 'auto-approve';
   reasoningEffort?: 'low' | 'medium' | 'high' | 'max';
+  // Spawn-time configuration (used when creating a new session)
+  allowedTools?: string[];       // --allowedTools
+  disallowedTools?: string[];    // --disallowedTools
+  addDirs?: string[];            // --add-dir
+  mcpConfig?: string[];          // --mcp-config (file paths or JSON strings)
+  agents?: Record<string, unknown>; // --agents (JSON object)
+  pluginDirs?: string[];         // --plugin-dir
+  systemPromptAppend?: string;   // --append-system-prompt
+  maxBudgetUsd?: number;         // --max-budget-usd
+  jsonSchema?: string;           // --json-schema (JSON string)
+  forkSession?: boolean;         // --fork-session
+  continueLastConversation?: boolean; // --continue (instead of --resume)
+  sessionName?: string;          // -n / --name
 }

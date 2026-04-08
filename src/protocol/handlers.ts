@@ -269,13 +269,26 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
           return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: projectPath');
         }
         try {
+          const p = request.params ?? {};
           const externalId = await ctx.runManager.createSession({
             projectPath,
-            externalId: request.params?.['externalId'] as string | undefined,
-            model: request.params?.['model'] as string | undefined,
-            profile: request.params?.['profile'] as string | undefined,
-            permissionMode: request.params?.['permissionMode'] as 'default' | 'auto-approve' | undefined,
-            reasoningEffort: request.params?.['reasoningEffort'] as 'low' | 'medium' | 'high' | 'max' | undefined,
+            externalId: p['externalId'] as string | undefined,
+            model: p['model'] as string | undefined,
+            profile: p['profile'] as string | undefined,
+            permissionMode: p['permissionMode'] as 'default' | 'auto-approve' | undefined,
+            reasoningEffort: p['reasoningEffort'] as 'low' | 'medium' | 'high' | 'max' | undefined,
+            allowedTools: p['allowedTools'] as string[] | undefined,
+            disallowedTools: p['disallowedTools'] as string[] | undefined,
+            addDirs: p['addDirs'] as string[] | undefined,
+            mcpConfig: p['mcpConfig'] as string[] | undefined,
+            agents: p['agents'] as Record<string, unknown> | undefined,
+            pluginDirs: p['pluginDirs'] as string[] | undefined,
+            systemPromptAppend: p['systemPromptAppend'] as string | undefined,
+            maxBudgetUsd: p['maxBudgetUsd'] as number | undefined,
+            jsonSchema: p['jsonSchema'] as string | undefined,
+            forkSession: p['forkSession'] as boolean | undefined,
+            continueLastConversation: p['continueLastConversation'] as boolean | undefined,
+            sessionName: p['sessionName'] as string | undefined,
           });
           return createResponse(request.id, { externalId });
         } catch (err) {
