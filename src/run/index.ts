@@ -21,6 +21,8 @@ interface ActiveSession {
   session: SessionProcess;
   process: ChildProcess;
   stderrBuffer: string;
+  cancelledRunId: string | null;  // Track cancelled run to drop stale events
+  lastRun: Run | null;            // Last completed/failed run for run.get backward compat
 }
 
 type RunEventCallback = (event: RunEvent) => void;
@@ -106,15 +108,18 @@ export class RunManager {
     if (!active || active.session.activeRunId !== runId) return false;
 
     log.info('Cancelling run', { runId, externalId });
-    active.process.kill('SIGINT');
 
-    // Transition to idle — process stays alive
-    active.session.state = 'idle';
+    // Track the cancelled runId so stdout handler drops stale events from this turn.
+    // Don't mark idle yet — wait for the result/exit event from the interrupted turn.
+    active.cancelledRunId = runId;
     active.session.activeRunId = null;
+    active.session.state = 'idle';
     active.session.lastActivityAt = Date.now();
     this.runs.delete(runId);
     this.emit({ type: 'run.cancelled', runId });
     this.startIdleTimer(externalId);
+
+    active.process.kill('SIGINT');
 
     return true;
   }
@@ -127,9 +132,13 @@ export class RunManager {
     if (!active) return false;
 
     log.info('Closing session', { externalId });
-    if (active.session.activeRunId) {
-      this.emit({ type: 'run.cancelled', runId: active.session.activeRunId });
-      this.runs.delete(active.session.activeRunId);
+    const runId = active.session.activeRunId;
+    // Clear state BEFORE killing so exit handler doesn't double-emit
+    active.session.activeRunId = null;
+    active.session.state = 'idle';
+    if (runId) {
+      this.runs.delete(runId);
+      this.emit({ type: 'run.cancelled', runId });
     }
     active.process.kill('SIGTERM');
     this.cleanupSession(externalId);
@@ -147,6 +156,10 @@ export class RunManager {
     permissionMode?: 'default' | 'auto-approve';
     reasoningEffort?: 'low' | 'medium' | 'high' | 'max';
   }): Promise<string> {
+    // Check for duplicate — don't spawn a second process for same externalId
+    if (params.externalId && this.sessions.has(params.externalId)) {
+      return params.externalId; // Already running
+    }
     if (this.sessions.size >= this.maxConcurrent) {
       throw new Error(`Max concurrent sessions (${this.maxConcurrent}) reached`);
     }
@@ -163,10 +176,24 @@ export class RunManager {
 
     // Wait for the system event to get externalId
     return new Promise<string>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Timeout waiting for session init')), 15000);
+      let resolved = false;
+      const cleanup = () => {
+        resolved = true;
+        proc.stdout?.removeListener('data', onData);
+        proc.removeListener('error', onError);
+        proc.removeListener('exit', onExit);
+      };
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          cleanup();
+          proc.kill('SIGTERM');
+          reject(new Error('Timeout waiting for session init'));
+        }
+      }, 15000);
 
       let stdoutBuffer = '';
       const onData = (data: Buffer) => {
+        if (resolved) return; // Guard against post-timeout events
         stdoutBuffer += data.toString();
         let idx: number;
         while ((idx = stdoutBuffer.indexOf('\n')) !== -1) {
@@ -176,6 +203,7 @@ export class RunManager {
           for (const event of events) {
             if (event.type === 'run.system') {
               clearTimeout(timeout);
+              cleanup();
               const externalId = event.externalId;
 
               const session: SessionProcess = {
@@ -192,10 +220,8 @@ export class RunManager {
                 instructionsSent: false,
               };
 
-              const activeSession: ActiveSession = { session, process: proc, stderrBuffer: '' };
+              const activeSession: ActiveSession = { session, process: proc, stderrBuffer: '', cancelledRunId: null, lastRun: null };
               this.sessions.set(externalId, activeSession);
-              // Remove temporary listener, set up permanent handlers
-              proc.stdout?.removeListener('data', onData);
               this.setupStdoutHandler(activeSession, 'init');
               this.setupStderrHandler(activeSession);
               this.setupExitHandler(activeSession);
@@ -208,23 +234,29 @@ export class RunManager {
       };
       proc.stdout?.on('data', onData);
 
-      proc.on('error', (err) => {
-        clearTimeout(timeout);
-        reject(err);
-      });
-      proc.on('exit', (code) => {
-        clearTimeout(timeout);
-        reject(new Error(`Process exited with code ${code} before init`));
-      });
+      const onError = (err: Error) => {
+        if (!resolved) { clearTimeout(timeout); cleanup(); reject(err); }
+      };
+      const onExit = (code: number | null) => {
+        if (!resolved) { clearTimeout(timeout); cleanup(); reject(new Error(`Process exited with code ${code} before init`)); }
+      };
+      proc.on('error', onError);
+      proc.on('exit', onExit);
     });
   }
 
   getRun(runId: string): Run | null {
+    // Check active runs first
     const externalId = this.runs.get(runId);
-    if (!externalId) return null;
-    const active = this.sessions.get(externalId);
-    if (!active) return null;
-    return this.buildRunFromSession(active.session, runId);
+    if (externalId) {
+      const active = this.sessions.get(externalId);
+      if (active) return this.buildRunFromSession(active.session, runId);
+    }
+    // Check last completed run on any session
+    for (const active of this.sessions.values()) {
+      if (active.lastRun?.runId === runId) return active.lastRun;
+    }
+    return null;
   }
 
   getActiveRuns(): Run[] {
@@ -335,7 +367,7 @@ export class RunManager {
       instructionsSent: true,
     };
 
-    const active: ActiveSession = { session, process: proc, stderrBuffer: '' };
+    const active: ActiveSession = { session, process: proc, stderrBuffer: '', cancelledRunId: null, lastRun: null };
     this.sessions.set(tempKey, active);
     this.runs.set(runId, tempKey);
 
@@ -407,7 +439,11 @@ export class RunManager {
     active.process.stdin?.write(line, 'utf-8', (err) => {
       if (err) {
         const runId = active.session.activeRunId;
+        // Clear state BEFORE cleanup so exit handler doesn't double-emit
+        active.session.activeRunId = null;
+        active.session.state = 'idle';
         if (runId) {
+          this.runs.delete(runId);
           this.emit({ type: 'run.failed', runId, error: `stdin write failed: ${err.message}` });
         }
         this.cleanupSession(active.session.externalId);
@@ -429,6 +465,14 @@ export class RunManager {
         const events = parseStreamLine(runId, line);
 
         for (const event of events) {
+          // Drop stale events from a cancelled run (trailing output after SIGINT)
+          if (active.cancelledRunId && event.runId === active.cancelledRunId) {
+            // Clear the cancelled marker on terminal events
+            if (event.type === 'run.completed' || event.type === 'run.failed') {
+              active.cancelledRunId = null;
+            }
+            continue; // Don't emit — this event belongs to the cancelled turn
+          }
           // Capture externalId from system event (first message only)
           if (event.type === 'run.system') {
             const newExternalId = event.externalId;
@@ -497,8 +541,19 @@ export class RunManager {
     });
   }
 
-  private handleTurnComplete(active: ActiveSession, _event: RunEvent & { type: 'run.completed' }): void {
+  private handleTurnComplete(active: ActiveSession, event: RunEvent & { type: 'run.completed' }): void {
     const runId = active.session.activeRunId;
+
+    // Save last run for run.get backward compat
+    if (runId) {
+      active.lastRun = {
+        ...this.buildRunFromSession(active.session, runId),
+        state: 'completed',
+        completedAt: Date.now(),
+        usage: event.usage,
+      };
+    }
+
     active.session.state = 'idle';
     active.session.activeRunId = null;
     active.session.lastActivityAt = Date.now();

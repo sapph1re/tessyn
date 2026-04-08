@@ -227,6 +227,18 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
         if (!params.prompt && (!params.content || params.content.length === 0)) {
           return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: prompt or content');
         }
+        // Validate content block types
+        if (params.content) {
+          for (const block of params.content) {
+            const b = block as Record<string, unknown>;
+            if (!b || typeof b !== 'object' || !b['type']) {
+              return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Invalid content block: missing type');
+            }
+            if (b['type'] !== 'text' && b['type'] !== 'image') {
+              return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, `Invalid content block type: ${b['type']}`);
+            }
+          }
+        }
         if (params.reasoningEffort && !['low', 'medium', 'high', 'max'].includes(params.reasoningEffort)) {
           return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, `Invalid reasoningEffort: ${params.reasoningEffort}. Must be low, medium, high, or max.`);
         }
@@ -448,6 +460,9 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
           }
           if (msg.includes('Profile not found')) {
             return createErrorResponse(request.id, RPC_ERRORS.PROFILE_NOT_FOUND, msg);
+          }
+          if (msg.includes('Session busy')) {
+            return createErrorResponse(request.id, RPC_ERRORS.SESSION_BUSY, msg);
           }
           throw err;
         }
