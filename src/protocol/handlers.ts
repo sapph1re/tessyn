@@ -481,6 +481,30 @@ export async function handleRequest(ctx: HandlerContext, raw: string): Promise<J
         }
       }
 
+      case 'mcp.list': {
+        if (!ctx.runManager) {
+          return createResponse(request.id, { servers: [] });
+        }
+        const mcpExternalId = request.params?.['externalId'] as string | undefined;
+        if (!mcpExternalId) {
+          return createErrorResponse(request.id, RPC_ERRORS.INVALID_PARAMS, 'Missing required: externalId');
+        }
+        const servers = ctx.runManager.getMcpServers(mcpExternalId);
+        if (servers === null) {
+          return createErrorResponse(request.id, RPC_ERRORS.SESSION_NOT_FOUND, `No running session: ${mcpExternalId}`);
+        }
+        return createResponse(request.id, { servers });
+      }
+
+      case 'usage.get': {
+        if (!ctx.runManager) {
+          return createResponse(request.id, {});
+        }
+        const usageProfile = request.params?.['profile'] as string | undefined;
+        const usage = ctx.runManager.getUsage(usageProfile);
+        return createResponse(request.id, usage);
+      }
+
       case 'shutdown': {
         log.info('Shutdown requested via RPC');
         setTimeout(() => process.emit('SIGTERM', 'SIGTERM'), 100);

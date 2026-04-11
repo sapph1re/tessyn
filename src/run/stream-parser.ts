@@ -68,6 +68,10 @@ function parseSystemEvent(runId: string, event: Record<string, unknown>): RunEve
   const sessionId = event['session_id'] as string | undefined;
   const model = event['model'] as string | undefined;
   const tools = (event['tools'] ?? []) as string[];
+  const mcpServers = ((event['mcp_servers'] ?? []) as Array<Record<string, unknown>>).map(s => ({
+    name: s['name'] as string,
+    status: s['status'] as string,
+  }));
 
   if (sessionId) {
     return [{
@@ -76,6 +80,7 @@ function parseSystemEvent(runId: string, event: Record<string, unknown>): RunEve
       externalId: sessionId,
       model: model ?? 'unknown',
       tools,
+      mcpServers,
     }];
   }
   return [];
@@ -253,5 +258,8 @@ function parseRateLimitEvent(runId: string, event: Record<string, unknown>): Run
     type: 'run.rate_limit',
     runId,
     retryAfterMs: Math.max(0, retryAfterMs),
+    rateLimitType: info['rateLimitType'] as string | undefined,
+    rateLimitStatus: info['status'] as string | undefined,
+    overageStatus: info['overageStatus'] as string | undefined,
   }];
 }

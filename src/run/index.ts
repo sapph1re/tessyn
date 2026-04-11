@@ -10,7 +10,7 @@ import { computeProjectSlug } from '../indexer/session-discovery.js';
 import { getClaudeProjectsDir } from '../platform/paths.js';
 import { resolveConfigDir } from '../platform/profiles.js';
 import * as queries from '../db/queries.js';
-import type { Run, RunEvent, RunSendParams, SessionProcess, ContentBlock } from './types.js';
+import type { Run, RunEvent, RunSendParams, SessionProcess, ContentBlock, UsageAccumulator } from './types.js';
 
 const log = createLogger('run-manager');
 
@@ -42,6 +42,7 @@ export class RunManager {
   private sessions = new Map<string, ActiveSession>();
   private runs = new Map<string, string>(); // runId → externalId
   private idleTimers = new Map<string, NodeJS.Timeout>();
+  private usageByProfile = new Map<string, UsageAccumulator>();
   private listeners: RunEventCallback[] = [];
   private maxConcurrent: number;
   private idleTimeoutMs: number;
@@ -184,6 +185,8 @@ export class RunManager {
       spawnedAt: now,
       lastActivityAt: now,
       instructionsSent: false,
+      mcpServers: [],
+      mcpTools: [],
     };
 
     const activeSession: ActiveSession = { session, process: proc, stderrBuffer: '', cancelledRunId: null, lastRun: null };
@@ -223,6 +226,43 @@ export class RunManager {
 
   getActiveSessions(): SessionProcess[] {
     return Array.from(this.sessions.values()).map(a => a.session);
+  }
+
+  /**
+   * Get MCP servers for a session by externalId.
+   * Returns server list with tools mapped from the system event.
+   */
+  getMcpServers(externalId: string): Array<{
+    name: string;
+    status: string;
+    tools: string[];
+  }> | null {
+    const active = this.sessions.get(externalId);
+    if (!active) return null;
+
+    const { mcpServers, mcpTools } = active.session;
+
+    // Map tools to servers using the naming convention: mcp__<server_key>__<tool_name>
+    return mcpServers.map(server => {
+      // Derive server key from name: "claude.ai Slack" → "claude_ai_Slack"
+      const serverKey = server.name.replace(/[.\s]/g, '_');
+      const serverTools = mcpTools
+        .filter(t => t.startsWith(`mcp__${serverKey}__`))
+        .map(t => t.replace(`mcp__${serverKey}__`, ''));
+      return {
+        name: server.name,
+        status: server.status,
+        tools: serverTools,
+      };
+    });
+  }
+
+  /**
+   * Get accumulated usage for a profile.
+   */
+  getUsage(profile?: string): UsageAccumulator {
+    const key = profile ?? 'default';
+    return this.usageByProfile.get(key) ?? this.emptyUsage();
   }
 
   cancelAll(): void {
@@ -317,6 +357,8 @@ export class RunManager {
       spawnedAt: now,
       lastActivityAt: now,
       instructionsSent: true,
+      mcpServers: [],
+      mcpTools: [],
     };
 
     const active: ActiveSession = { session, process: proc, stderrBuffer: '', cancelledRunId: null, lastRun: null };
@@ -496,6 +538,8 @@ export class RunManager {
               }
             }
             active.session.model = event.model;
+            active.session.mcpServers = event.mcpServers;
+            active.session.mcpTools = event.tools;
           }
 
           // Handle turn completion
@@ -504,6 +548,10 @@ export class RunManager {
           }
           if (event.type === 'run.failed' || event.type === 'run.auth_required') {
             this.handleTurnFailed(active, event);
+          }
+          // Capture rate limit info
+          if (event.type === 'run.rate_limit') {
+            this.updateRateLimit(active.session.profile ?? 'default', event);
           }
 
           this.emit(event);
@@ -565,6 +613,11 @@ export class RunManager {
     active.session.activeRunId = null;
     active.session.lastActivityAt = Date.now();
     if (runId) this.runs.delete(runId);
+
+    // Accumulate usage per profile
+    if (event.usage) {
+      this.accumulateUsage(active.session.profile ?? 'default', event.usage);
+    }
 
     // Reindex the session's JSONL
     const eid = active.session.externalId;
@@ -647,5 +700,36 @@ export class RunManager {
       error: null,
       usage: null,
     };
+  }
+
+  private emptyUsage(): UsageAccumulator {
+    return {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      totalCostUsd: 0,
+      modelUsage: {},
+      rateLimit: { type: null, status: null, resetsAt: null, overageStatus: null },
+    };
+  }
+
+  private accumulateUsage(profile: string, usage: import('./types.js').RunUsage): void {
+    const acc = this.usageByProfile.get(profile) ?? this.emptyUsage();
+    acc.inputTokens += usage.inputTokens;
+    acc.outputTokens += usage.outputTokens;
+    acc.cacheReadInputTokens += usage.cacheReadInputTokens;
+    acc.cacheCreationInputTokens += usage.cacheCreationInputTokens;
+    acc.totalCostUsd += usage.costUsd ?? 0;
+    this.usageByProfile.set(profile, acc);
+  }
+
+  private updateRateLimit(profile: string, event: RunEvent & { type: 'run.rate_limit' }): void {
+    const acc = this.usageByProfile.get(profile) ?? this.emptyUsage();
+    acc.rateLimit.resetsAt = Date.now() + event.retryAfterMs;
+    if (event.rateLimitType) acc.rateLimit.type = event.rateLimitType;
+    if (event.rateLimitStatus) acc.rateLimit.status = event.rateLimitStatus;
+    if (event.overageStatus) acc.rateLimit.overageStatus = event.overageStatus;
+    this.usageByProfile.set(profile, acc);
   }
 }

@@ -6,6 +6,11 @@ export type ContentBlock =
 
 // === Session Process (persistent per-session Claude process) ===
 
+export interface McpServerInfo {
+  name: string;
+  status: string;  // "connected", "disconnected", "needs-auth", "error", etc.
+}
+
 export interface SessionProcess {
   externalId: string;
   projectPath: string;
@@ -18,6 +23,32 @@ export interface SessionProcess {
   spawnedAt: number;
   lastActivityAt: number;
   instructionsSent: boolean;
+  // MCP data (populated from system init event)
+  mcpServers: McpServerInfo[];
+  mcpTools: string[];  // full tool names including mcp__* prefix
+}
+
+// === Usage Tracking ===
+
+export interface UsageAccumulator {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  totalCostUsd: number;
+  modelUsage: Record<string, {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadInputTokens: number;
+    cacheCreationInputTokens: number;
+    costUsd: number;
+  }>;
+  rateLimit: {
+    type: string | null;
+    status: string | null;
+    resetsAt: number | null;
+    overageStatus: string | null;
+  };
 }
 
 // === Run State Machine ===
@@ -74,6 +105,7 @@ export interface RunSystemEvent {
   externalId: string;
   model: string;
   tools: string[];
+  mcpServers: McpServerInfo[];
 }
 
 export interface RunDeltaEvent {
@@ -136,6 +168,9 @@ export interface RunRateLimitEvent {
   type: 'run.rate_limit';
   runId: string;
   retryAfterMs: number;
+  rateLimitType?: string;
+  rateLimitStatus?: string;
+  overageStatus?: string;
 }
 
 // === Send Parameters ===
