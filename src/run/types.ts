@@ -129,6 +129,8 @@ export interface RunBlockStopEvent {
   type: 'run.block_stop';
   runId: string;
   blockIndex: number;
+  toolResult?: string;
+  isError?: boolean;
 }
 
 export interface RunMessageEvent {

@@ -3,6 +3,75 @@ import type { RunEvent, RunUsage } from './types.js';
 
 const log = createLogger('stream-parser');
 
+/**
+ * Stateful stream parser that buffers tool input deltas and
+ * captures tool results across content blocks.
+ */
+export class StreamParserState {
+  // Buffer input_json_delta chunks per block index
+  private inputBuffers = new Map<number, string>();
+  // Track tool_use_id per block index for matching results
+  private toolUseIds = new Map<number, string>();
+  // Store completed tool inputs per tool_use_id
+  private completedInputs = new Map<string, Record<string, unknown>>();
+  // Store tool_use_id → block index mapping for result enrichment
+  private toolBlockIndex = new Map<string, number>();
+
+  /**
+   * Feed an input_json_delta chunk for a block.
+   */
+  addInputDelta(blockIndex: number, partialJson: string): void {
+    const existing = this.inputBuffers.get(blockIndex) ?? '';
+    this.inputBuffers.set(blockIndex, existing + partialJson);
+  }
+
+  /**
+   * Get the accumulated tool input for a block, parsed as JSON.
+   */
+  getToolInput(blockIndex: number): Record<string, unknown> | null {
+    const buffer = this.inputBuffers.get(blockIndex);
+    if (!buffer) return null;
+    try {
+      return JSON.parse(buffer) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Register a completed tool_use block from the full assistant message.
+   */
+  registerToolUse(toolUseId: string, blockIndex: number, input: Record<string, unknown>): void {
+    this.toolUseIds.set(blockIndex, toolUseId);
+    this.completedInputs.set(toolUseId, input);
+    this.toolBlockIndex.set(toolUseId, blockIndex);
+  }
+
+  /**
+   * Get tool result enrichment data for a tool_use_id.
+   */
+  getToolBlockIndex(toolUseId: string): number | undefined {
+    return this.toolBlockIndex.get(toolUseId);
+  }
+
+  /**
+   * Clean up buffer for a block when it's done.
+   */
+  clearBlock(blockIndex: number): void {
+    this.inputBuffers.delete(blockIndex);
+  }
+
+  /**
+   * Reset all state (between turns).
+   */
+  reset(): void {
+    this.inputBuffers.clear();
+    this.toolUseIds.clear();
+    this.completedInputs.clear();
+    this.toolBlockIndex.clear();
+  }
+}
+
 // Auth error patterns — tested against real Claude CLI output.
 // The most reliable signal is the "error":"authentication_failed" field
 // on assistant messages, but we also check result text for robustness.
@@ -32,7 +101,7 @@ export function isAuthError(errorText: string): boolean {
  * Each line is one of: system, assistant, user, stream_event, result, rate_limit_event
  * A single line can produce 0 or more RunEvents.
  */
-export function parseStreamLine(runId: string, line: string): RunEvent[] {
+export function parseStreamLine(runId: string, line: string, state?: StreamParserState): RunEvent[] {
   if (!line.trim()) return [];
 
   let parsed: Record<string, unknown>;
@@ -50,11 +119,11 @@ export function parseStreamLine(runId: string, line: string): RunEvent[] {
     case 'system':
       return parseSystemEvent(runId, parsed);
     case 'assistant':
-      return parseAssistantEvent(runId, parsed);
+      return parseAssistantEvent(runId, parsed, state);
     case 'user':
-      return parseUserEvent(runId, parsed);
+      return parseUserEvent(runId, parsed, state);
     case 'stream_event':
-      return parseStreamEvent(runId, parsed);
+      return parseStreamEvent(runId, parsed, state);
     case 'result':
       return parseResultEvent(runId, parsed);
     case 'rate_limit_event':
@@ -86,12 +155,11 @@ function parseSystemEvent(runId: string, event: Record<string, unknown>): RunEve
   return [];
 }
 
-function parseAssistantEvent(runId: string, event: Record<string, unknown>): RunEvent[] {
+function parseAssistantEvent(runId: string, event: Record<string, unknown>, state?: StreamParserState): RunEvent[] {
   const message = event['message'] as Record<string, unknown> | undefined;
   if (!message) return [];
 
-  // Check for auth error — Claude CLI sets "error":"authentication_failed" on the
-  // assistant message when not logged in. This is the most reliable signal.
+  // Check for auth error
   const errorField = event['error'] as string | undefined;
   if (errorField === 'authentication_failed') {
     const content = message['content'];
@@ -107,6 +175,19 @@ function parseAssistantEvent(runId: string, event: Record<string, unknown>): Run
 
   const content = message['content'];
   if (Array.isArray(content)) {
+    // Register tool_use blocks with state for result matching
+    if (state) {
+      for (let i = 0; i < content.length; i++) {
+        const block = content[i] as Record<string, unknown>;
+        if (block?.['type'] === 'tool_use' && block['id']) {
+          state.registerToolUse(
+            block['id'] as string,
+            i,
+            (block['input'] as Record<string, unknown>) ?? {},
+          );
+        }
+      }
+    }
     return [{
       type: 'run.message',
       runId,
@@ -117,23 +198,56 @@ function parseAssistantEvent(runId: string, event: Record<string, unknown>): Run
   return [];
 }
 
-function parseUserEvent(runId: string, event: Record<string, unknown>): RunEvent[] {
+function parseUserEvent(runId: string, event: Record<string, unknown>, state?: StreamParserState): RunEvent[] {
   const message = event['message'] as Record<string, unknown> | undefined;
   if (!message) return [];
 
   const content = message['content'];
-  if (Array.isArray(content) || typeof content === 'string') {
-    return [{
+  const events: RunEvent[] = [];
+
+  if (Array.isArray(content)) {
+    events.push({
       type: 'run.message',
       runId,
       role: 'user',
-      content: Array.isArray(content) ? content as unknown[] : [{ type: 'text', text: content }],
-    }];
+      content: content as unknown[],
+    });
+
+    // Extract tool results and emit as enriched block_stop events
+    if (state) {
+      for (const block of content as Array<Record<string, unknown>>) {
+        if (block?.['type'] === 'tool_result' && block['tool_use_id']) {
+          const toolUseId = block['tool_use_id'] as string;
+          const blockIndex = state.getToolBlockIndex(toolUseId);
+          if (blockIndex !== undefined) {
+            const resultContent = block['content'];
+            const resultText = typeof resultContent === 'string' ? resultContent
+              : Array.isArray(resultContent) ? (resultContent as Array<Record<string, unknown>>).map(b => b['text'] ?? '').join('')
+              : String(resultContent ?? '');
+            events.push({
+              type: 'run.block_stop',
+              runId,
+              blockIndex,
+              toolResult: resultText,
+              isError: block['is_error'] === true,
+            });
+          }
+        }
+      }
+    }
+  } else if (typeof content === 'string') {
+    events.push({
+      type: 'run.message',
+      runId,
+      role: 'user',
+      content: [{ type: 'text', text: content }],
+    });
   }
-  return [];
+
+  return events;
 }
 
-function parseStreamEvent(runId: string, event: Record<string, unknown>): RunEvent[] {
+function parseStreamEvent(runId: string, event: Record<string, unknown>, state?: StreamParserState): RunEvent[] {
   const inner = event['event'] as Record<string, unknown> | undefined;
   if (!inner) return [];
 
@@ -181,15 +295,23 @@ function parseStreamEvent(runId: string, event: Record<string, unknown>): RunEve
           blockIndex: index,
         }];
       }
+      // Buffer tool input JSON deltas
+      if (deltaType === 'input_json_delta' && delta['partial_json'] !== undefined && state) {
+        state.addInputDelta(index, delta['partial_json'] as string);
+      }
       return [];
     }
 
     case 'content_block_stop': {
       const index = inner['index'] as number;
+      // For tool_use blocks, include the accumulated input
+      const toolInput = state?.getToolInput(index);
+      state?.clearBlock(index);
       return [{
         type: 'run.block_stop',
         runId,
         blockIndex: index,
+        ...(toolInput ? { toolResult: undefined } : {}),
       }];
     }
 

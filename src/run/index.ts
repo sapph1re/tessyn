@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import crypto from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { createLogger } from '../shared/logger.js';
-import { parseStreamLine, isAuthError } from './stream-parser.js';
+import { parseStreamLine, isAuthError, StreamParserState } from './stream-parser.js';
 import { buildInstructions } from './instructions.js';
 import path from 'node:path';
 import { indexSession } from '../indexer/index.js';
@@ -23,6 +23,7 @@ interface ActiveSession {
   stderrBuffer: string;
   cancelledRunId: string | null;  // Track cancelled run to drop stale events
   lastRun: Run | null;            // Last completed/failed run for run.get backward compat
+  parserState: StreamParserState; // Stateful parser for tool input/result buffering
 }
 
 type RunEventCallback = (event: RunEvent) => void;
@@ -189,7 +190,7 @@ export class RunManager {
       mcpTools: [],
     };
 
-    const activeSession: ActiveSession = { session, process: proc, stderrBuffer: '', cancelledRunId: null, lastRun: null };
+    const activeSession: ActiveSession = { session, process: proc, stderrBuffer: '', cancelledRunId: null, lastRun: null, parserState: new StreamParserState() };
     this.sessions.set(externalId, activeSession);
     this.setupStdoutHandler(activeSession, 'create');
     this.setupStderrHandler(activeSession);
@@ -361,7 +362,7 @@ export class RunManager {
       mcpTools: [],
     };
 
-    const active: ActiveSession = { session, process: proc, stderrBuffer: '', cancelledRunId: null, lastRun: null };
+    const active: ActiveSession = { session, process: proc, stderrBuffer: '', cancelledRunId: null, lastRun: null, parserState: new StreamParserState() };
     this.sessions.set(tempKey, active);
     this.runs.set(runId, tempKey);
 
@@ -511,7 +512,7 @@ export class RunManager {
 
         // Use the current activeRunId (may change across turns)
         const runId = active.session.activeRunId ?? initialRunId;
-        const events = parseStreamLine(runId, line);
+        const events = parseStreamLine(runId, line, active.parserState);
 
         for (const event of events) {
           // Drop stale events from a cancelled run (trailing output after SIGINT)
@@ -612,6 +613,7 @@ export class RunManager {
     active.session.state = 'idle';
     active.session.activeRunId = null;
     active.session.lastActivityAt = Date.now();
+    active.parserState.reset(); // Clear tool buffers between turns
     if (runId) this.runs.delete(runId);
 
     // Accumulate usage per profile
